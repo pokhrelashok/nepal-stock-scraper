@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const Scheduler = require('./scheduler');
 const {
   searchStocks,
   getScriptDetails,
@@ -15,8 +16,62 @@ const { formatResponse, formatError } = require('./utils/formatter');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Initialize scheduler
+const scheduler = new Scheduler();
+
+// Graceful shutdown handling
+const cleanup = async () => {
+  console.log('\n🧹 Shutting down server...');
+  if (scheduler) {
+    await scheduler.stopAllSchedules();
+  }
+  console.log('✅ Server shutdown completed');
+  process.exit(0);
+};
+
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
+
+// Middleware
 app.use(cors());
 app.use(bodyParser.json());
+
+// Scheduler endpoints
+app.post('/api/scheduler/start', async (req, res) => {
+  try {
+    if (scheduler.isSchedulerRunning()) {
+      return res.status(400).json(formatError('Scheduler is already running', 400));
+    }
+    await scheduler.startPriceUpdateSchedule();
+    res.json(formatResponse({ message: 'Scheduler started successfully' }));
+  } catch (error) {
+    console.error('Failed to start scheduler:', error);
+    res.status(500).json(formatError('Failed to start scheduler'));
+  }
+});
+
+app.post('/api/scheduler/stop', async (req, res) => {
+  try {
+    await scheduler.stopAllSchedules();
+    res.json(formatResponse({ message: 'Scheduler stopped successfully' }));
+  } catch (error) {
+    console.error('Failed to stop scheduler:', error);
+    res.status(500).json(formatError('Failed to stop scheduler'));
+  }
+});
+
+app.get('/api/scheduler/status', (req, res) => {
+  try {
+    const status = {
+      running: scheduler.isSchedulerRunning(),
+      activeJobs: scheduler.getActiveJobs()
+    };
+    res.json(formatResponse(status));
+  } catch (error) {
+    console.error('Failed to get scheduler status:', error);
+    res.status(500).json(formatError('Failed to get scheduler status'));
+  }
+});
 
 app.get('/api/search', async (req, res) => {
   try {

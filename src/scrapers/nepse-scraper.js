@@ -76,17 +76,120 @@ class NepseScraper {
       const page = await this.browser.newPage();
       await page.setUserAgent(this.userAgent);
 
-      // Try API capture first (fastest method)
+      // Try CSV download method first (most reliable)
       try {
-        return await this.scrapeTodayPricesAPI(page);
-      } catch (apiError) {
-        console.log('⚠️ API capture failed, falling back to HTML scraping...');
-        return await this.scrapeTodayPricesHTML(page);
+        return await this.scrapeTodayPricesCSVDownload(page);
+      } catch (csvError) {
+        console.log('⚠️ CSV download method failed, falling back to API capture...');
+
+        // Try API capture method
+        try {
+          return await this.scrapeTodayPricesAPI(page);
+        } catch (apiError) {
+          console.log('⚠️ API capture failed, falling back to HTML scraping...');
+          return await this.scrapeTodayPricesHTML(page);
+        }
       }
     } catch (error) {
       console.error('❌ All scraping methods failed:', error.message);
       throw error;
     }
+  }
+
+  async scrapeTodayPricesCSVDownload(page) {
+    console.log('📥 Using CSV download method...');
+
+    let interceptedData = null;
+
+    // Intercept the API response
+    page.on('response', async response => {
+      const url = response.url();
+
+      if (url.includes('todays-price') && response.status() === 200) {
+        try {
+          const responseData = await response.text();
+          const jsonData = JSON.parse(responseData);
+          if (Array.isArray(jsonData) && jsonData.length > 0) {
+            interceptedData = jsonData;
+            console.log(`📊 Intercepted ${jsonData.length} price records`);
+          }
+        } catch (error) {
+          console.log(`Error parsing intercepted data: ${error.message}`);
+        }
+      }
+    });
+
+    // Navigate to page
+    console.log('🌐 Loading today-price page...');
+    await page.goto(TODAY_PRICE_URL, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    // Wait for page to load
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Look for and click the CSV download button
+    await page.waitForSelector('.download-csv', { timeout: 15000 });
+    const downloadButton = await page.$('.download-csv');
+
+    if (!downloadButton) {
+      throw new Error('CSV download button not found');
+    }
+
+    console.log('🎯 Clicking CSV download button...');
+    await downloadButton.click();
+
+    // Wait for the API call to complete
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    if (!interceptedData) {
+      throw new Error('No data intercepted from CSV download');
+    }
+
+    // Format the intercepted data
+    const formattedData = this.formatCSVDownloadData(interceptedData);
+    console.log(`✅ Successfully processed ${formattedData.length} records via CSV download`);
+    return formattedData;
+  }
+
+  formatCSVDownloadData(data) {
+    if (!Array.isArray(data)) return [];
+
+    return data.map(record => {
+      // Calculate changes
+      const ltp = record.lastUpdatedPrice || record.lastTradedPrice || record.closePrice || 0;
+      const prevClose = record.previousDayClosePrice || 0;
+      const pointChange = ltp && prevClose ? (ltp - prevClose) : 0;
+      const percentChange = prevClose && prevClose !== 0 ? ((pointChange / prevClose) * 100) : 0;
+
+      return {
+        symbol: record.symbol,
+        securityName: record.securityName,
+        securityId: record.securityId,
+        businessDate: record.businessDate,
+        openPrice: record.openPrice || 0,
+        highPrice: record.highPrice || 0,
+        lowPrice: record.lowPrice || 0,
+        closePrice: ltp,
+        previousClose: prevClose,
+        change: pointChange,
+        percentageChange: percentChange,
+        totalTradedQuantity: record.totalTradedQuantity || 0,
+        totalTradedValue: record.totalTradedValue || 0,
+        totalTrades: record.totalTrades || 0,
+        averageTradedPrice: record.averageTradedPrice || 0,
+        marketCapitalization: record.marketCapitalization || 0,
+        fiftyTwoWeekHigh: record.fiftyTwoWeekHigh || 0,
+        fiftyTwoWeekLow: record.fiftyTwoWeekLow || 0,
+        lastUpdatedTime: record.lastUpdatedTime,
+        lastTradedPrice: ltp,
+        volume: record.totalTradedQuantity || 0,
+        turnover: record.totalTradedValue || 0,
+        maxPrice: record.highPrice || 0,
+        minPrice: record.lowPrice || 0
+      };
+    }).filter(stock => stock.symbol);
   }
 
   async scrapeTodayPricesAPI(page) {

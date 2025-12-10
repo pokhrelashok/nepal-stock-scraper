@@ -11,6 +11,25 @@ A comprehensive Node.js API for scraping and serving Nepal Stock Exchange (NEPSE
 - **Automated Scheduling**: Cron-based scraping during market hours
 - **Database Storage**: SQLite database with 30+ fields per company
 
+## Architecture
+
+The application has been designed with a clean separation of concerns:
+
+### Core Components
+
+- **Scraper (`src/scrapers/nepse-scraper.js`)**: Handles all web scraping operations with proper resource management
+- **Scheduler (`src/scheduler.js`)**: Manages scheduled tasks independently from scraping logic  
+- **Database Layer (`src/database/`)**: Handles all data persistence operations
+- **API Server (`src/server.js`)**: Provides REST API endpoints for accessing scraped data
+- **CLI Interface (`src/index.js`)**: Command-line interface for manual operations
+
+### Key Features
+
+- **Resource Management**: Automatic cleanup of browser instances and database connections
+- **Graceful Shutdown**: Proper handling of SIGINT/SIGTERM signals for clean exits
+- **Separation of Concerns**: Scheduler and scraper are independent components
+- **Error Recovery**: Robust error handling and recovery mechanisms
+
 ## Quick Start
 
 ```bash
@@ -38,6 +57,9 @@ npm test
 | GET | `/api/market/stats` | Market statistics and insights |
 | GET | `/api/search?q=QUERY` | Search stocks by symbol or name |
 | POST | `/api/prices` | Get latest prices for multiple symbols |
+| **POST** | **`/api/scheduler/start`** | **Start the automated price scheduler** |
+| **POST** | **`/api/scheduler/stop`** | **Stop the automated price scheduler** |
+| **GET** | **`/api/scheduler/status`** | **Get scheduler status and active jobs** |
 
 ## Scripts
 
@@ -66,17 +88,18 @@ src/
 │   ├── database.js      # Database connection and core operations
 │   └── queries.js       # Database query functions
 ├── scrapers/
-│   └── nepse-scraper.js # Web scraping logic
+│   └── nepse-scraper.js # Web scraping logic (NepseScraper class)
 ├── utils/
 │   └── formatter.js     # Response formatting utilities
-├── index.js             # Scheduler and automation
+├── scheduler.js         # Cron-based scheduling service
+├── index.js             # CLI interface for manual operations
 └── server.js            # Express API server
 
 tests/
 ├── scraper.test.js      # Scraper functionality tests
 └── api.test.js          # API endpoint tests
 
-nepse.js                 # Main CLI entry point
+nepse.js                 # CLI entry point
 package.json
 README.md
 ```

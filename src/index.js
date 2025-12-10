@@ -1,81 +1,183 @@
-const cron = require('node-cron');
-const { fetchTodaysPrices, scrapeMarketStatus, scrapeAllCompanyDetails } = require('./scrapers/nepse-scraper');
-const { savePrices, saveCompanyDetails } = require('./database/database');
-const { getAllSecurityIds } = require('./database/queries');
+#!/usr/bin/env node
 
-const FORCE_RUN = process.argv.includes('--force');
-const SCRAPE_DETAILS = process.argv.includes('--scrape-details');
+const { program } = require('commander');
+const Scheduler = require('./scheduler');
+const { NepseScraper } = require('./scrapers/nepse-scraper');
+const { getAllSecurityIds, insertTodayPrices, insertCompanyDetails } = require('./database/queries');
+const { formatPricesForDatabase, formatCompanyDetailsForDatabase } = require('./utils/formatter');
+const { db } = require('./database/database');
+const fs = require('fs');
+const path = require('path');
 
-async function runScraper() {
-  console.log(`[${new Date().toISOString()}] Starting scheduled scrape...`);
+// Global scheduler and scraper instances
+let scheduler = null;
+let scraper = null;
 
-  const isOpen = await scrapeMarketStatus();
-  console.log(`Market Open Status: ${isOpen}`);
+// Cleanup function
+const cleanup = async () => {
+  console.log('\n🧹 Cleaning up resources...');
 
-  if (!isOpen && !FORCE_RUN) {
-    console.log('Market is CLOSED. Skipping scrape.');
-    return;
+  if (scheduler) {
+    await scheduler.stopAllSchedules();
+    scheduler = null;
   }
 
-  if (!isOpen && FORCE_RUN) {
-    console.log('Market is CLOSED but Force Run is active. Attempting scrape anyway...');
+  if (scraper) {
+    await scraper.close();
+    scraper = null;
   }
 
-  try {
-    const prices = await fetchTodaysPrices();
-    if (prices.length > 0) {
-      console.log(`Fetched ${prices.length} prices.`);
-      await savePrices(prices);
-    } else {
-      console.log('No prices scraped (Table might be empty).');
+  console.log('✅ Cleanup completed');
+};
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  await cleanup();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await cleanup();
+  process.exit(0);
+});
+
+program
+  .name('nepse-scraper')
+  .description('Nepal Stock Exchange scraper and scheduler')
+  .version('1.0.0');
+
+program
+  .command('market-status')
+  .description('Check current market status')
+  .action(async () => {
+    try {
+      console.log('🔍 Checking market status...');
+      scraper = new NepseScraper();
+      const isOpen = await scraper.scrapeMarketStatus();
+      console.log(`📊 Market is ${isOpen ? 'OPEN' : 'CLOSED'}`);
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    } finally {
+      if (scraper) {
+        await scraper.close();
+        scraper = null;
+      }
     }
-  } catch (err) {
-    console.error('Failed to scrape:', err);
-  }
-}
+  });
 
-async function runDetailScraper() {
-  console.log(`[${new Date().toISOString()}] Starting Company Details Scrape...`);
-  try {
-    const ids = await getAllSecurityIds();
-    if (ids.length === 0) {
-      console.log('No securities found in DB to scrape details for.');
-      return;
+program
+  .command('prices')
+  .description('Scrape today\'s stock prices')
+  .option('-s, --save', 'Save to database')
+  .option('-f, --file <filename>', 'Save to JSON file')
+  .action(async (options) => {
+    try {
+      console.log('📊 Scraping today\'s prices...');
+      scraper = new NepseScraper();
+      const prices = await scraper.scrapeTodayPrices();
+
+      console.log(`✅ Scraped ${prices.length} stock prices`);
+
+      if (options.save) {
+        const formattedPrices = formatPricesForDatabase(prices);
+        await insertTodayPrices(formattedPrices);
+        console.log('💾 Prices saved to database');
+      }
+
+      if (options.file) {
+        const timestamp = new Date().toISOString();
+        const filename = options.file.includes('.json') ? options.file : `${options.file}.json`;
+        const filepath = path.resolve(filename);
+        fs.writeFileSync(filepath, JSON.stringify(prices, null, 2));
+        console.log(`📄 Prices saved to ${filepath}`);
+      }
+
+      if (!options.save && !options.file) {
+        console.log('📋 Sample data:');
+        console.log(JSON.stringify(prices.slice(0, 3), null, 2));
+      }
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    } finally {
+      if (scraper) {
+        await scraper.close();
+        scraper = null;
+      }
     }
+  });
 
-    await scrapeAllCompanyDetails(ids, async (batch) => {
-      const today = new Date().toISOString().split('T')[0];
-      batch.forEach(item => {
-        if (!item.businessDate) item.businessDate = today;
-      });
+program
+  .command('companies')
+  .description('Scrape all company details')
+  .option('-s, --save', 'Save to database')
+  .option('-f, --file <filename>', 'Save to JSON file')
+  .option('-l, --limit <number>', 'Limit number of companies to scrape', parseInt)
+  .action(async (options) => {
+    try {
+      console.log('📋 Getting security IDs...');
+      const securityIds = await getAllSecurityIds(); if (securityIds.length === 0) {
+        console.log('⚠️ No security IDs found. Please scrape prices first.');
+        return;
+      }
 
-      await saveCompanyDetails(batch);
-      await savePrices(batch);
-    });
-    console.log('Detail Scrape Completed.');
-  } catch (err) {
-    console.error('Detail Scrape Failed:', err);
-  }
-}
+      const targetIds = options.limit ? securityIds.slice(0, options.limit) : securityIds;
+      console.log(`🏢 Scraping details for ${targetIds.length} companies...`);
 
-if (FORCE_RUN) {
-  console.log('Force run initiated...');
-  runScraper();
-}
+      scraper = new NepseScraper();
 
-if (SCRAPE_DETAILS) {
-  console.log('Detail Scraping initiated...');
-  runDetailScraper();
-}
+      const batchCallback = options.save ? async (batch) => {
+        const formattedDetails = formatCompanyDetailsForDatabase(batch);
+        await insertCompanyDetails(formattedDetails);
+        console.log(`💾 Saved batch of ${batch.length} company details`);
+      } : null;
 
-cron.schedule('*/5 10-15 * * 0-4', () => {
-  runScraper();
-}, { timezone: "Asia/Kathmandu" });
+      const details = await scraper.scrapeAllCompanyDetails(targetIds, batchCallback);
 
-cron.schedule('0 10 * * 0-4', () => {
-  runDetailScraper();
-}, { timezone: "Asia/Kathmandu" });
+      console.log(`✅ Scraped details for ${details.length} companies`);
 
-console.log('Scheduler Service started.');
-console.log(' - Price Scrape: */5 10-15 * * 0-4');
-console.log(' - Detail Scrape: 0 10 * * 0-4');
+      if (options.file) {
+        const filename = options.file.includes('.json') ? options.file : `${options.file}.json`;
+        const filepath = path.resolve(filename);
+        fs.writeFileSync(filepath, JSON.stringify(details, null, 2));
+        console.log(`📄 Company details saved to ${filepath}`);
+      }
+
+      if (!options.save && !options.file) {
+        console.log('📋 Sample data:');
+        console.log(JSON.stringify(details.slice(0, 2), null, 2));
+      }
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      process.exit(1);
+    } finally {
+      if (scraper) {
+        await scraper.close();
+        scraper = null;
+      }
+    }
+  });
+
+program
+  .command('schedule')
+  .description('Start the price update scheduler')
+  .action(async () => {
+    try {
+      scheduler = new Scheduler();
+      await scheduler.startPriceUpdateSchedule();
+
+      console.log('📅 Scheduler started. Press Ctrl+C to stop.');
+
+      // Keep process alive
+      process.stdin.resume();
+
+    } catch (error) {
+      console.error('❌ Error:', error.message);
+      await cleanup();
+      process.exit(1);
+    }
+  });
+
+program.parse();
+
