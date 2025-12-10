@@ -7,11 +7,15 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 3000,
+        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
+        PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
       },
       env_production: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 3000,
+        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
+        PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
       },
       error_file: './logs/api-err.log',
       out_file: './logs/api-out.log',
@@ -29,7 +33,9 @@ module.exports = {
       instances: 1,
       exec_mode: 'fork',
       env: {
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
+        PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
       },
       error_file: './logs/scheduler-err.log',
       out_file: './logs/scheduler-out.log',

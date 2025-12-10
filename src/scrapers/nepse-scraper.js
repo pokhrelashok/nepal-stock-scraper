@@ -13,16 +13,32 @@ class NepseScraper {
 
   async init() {
     if (!this.browser) {
-      this.browser = await puppeteer.launch({
+      const launchOptions = {
         headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
-          '--disable-gpu'
+          '--disable-gpu',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor'
         ]
-      });
+      };
+
+      // Use system Chrome in production
+      if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+      }
+
+      this.browser = await puppeteer.launch(launchOptions);
     }
   }
 
