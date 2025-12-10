@@ -510,7 +510,7 @@ class NepseScraper {
           });
 
           // Process the logo image - save base64 images, ignore URLs
-          const processedLogoUrl = processImageData(data.rawLogoData, symbol);
+          const processedLogoUrl = await processImageData(data.rawLogoData, symbol);
 
           const item = {
             securityId: security_id,

@@ -37,6 +37,7 @@
     "luxon": "^3.7.2",
     "node-cron": "^4.2.1",
     "puppeteer": "^24.32.1",
+    "sharp": "^0.34.5",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
