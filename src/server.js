@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const path = require('path');
 const Scheduler = require('./scheduler');
 const {
   searchStocks,
@@ -38,6 +39,7 @@ process.on('SIGTERM', cleanup);
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Scheduler endpoints
 app.post('/api/scheduler/start', async (req, res) => {

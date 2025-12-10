@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const { processImageData } = require('../utils/image-handler');
 const { DateTime } = require('luxon');
 
 const NEPSE_URL = 'https://www.nepalstock.com';
@@ -417,14 +418,16 @@ class NepseScraper {
             if (!logoImg || logoImg.getAttribute('src').includes('placeholder')) {
               logoImg = document.querySelector('.company__title--logo img');
             }
-            info.logoUrl = logoImg ? logoImg.getAttribute('src') : '';
-            if (info.logoUrl && info.logoUrl.startsWith('assets/')) {
-              info.logoUrl = `https://www.nepalstock.com/${info.logoUrl}`;
+            info.rawLogoData = logoImg ? logoImg.getAttribute('src') : '';
+            if (info.rawLogoData && info.rawLogoData.startsWith('assets/')) {
+              info.rawLogoData = `https://www.nepalstock.com/${info.rawLogoData}`;
             }
-            info.isLogoPlaceholder = info.logoUrl.includes('placeholder');
+            info.isLogoPlaceholder = info.rawLogoData.includes('placeholder');
 
             const companyNameEl = document.querySelector('.company__title--details h1');
-            info.companyName = companyNameEl ? clean(companyNameEl.innerText) : '';
+            let companyName = companyNameEl ? clean(companyNameEl.innerText) : '';
+            // Remove symbol in parentheses from company name (e.g., "Company Name (SYMBOL)" -> "Company Name")
+            info.companyName = companyName.replace(/\s*\([A-Z]+\)\s*$/, '').trim();
 
             const metaItems = document.querySelectorAll('.company__title--metas li');
             metaItems.forEach(li => {
@@ -506,7 +509,19 @@ class NepseScraper {
             return info;
           });
 
-          const item = { securityId: security_id, symbol: symbol, ...data };
+          // Process the logo image - save base64 images, ignore URLs
+          const processedLogoUrl = processImageData(data.rawLogoData, symbol);
+
+          const item = {
+            securityId: security_id,
+            symbol: symbol,
+            ...data,
+            logoUrl: processedLogoUrl // Replace with processed URL or null
+          };
+
+          // Remove rawLogoData from the final item
+          delete item.rawLogoData;
+
           details.push(item);
           if (saveCallback) {
             currentBatch.push(item);
