@@ -14,6 +14,38 @@ const formatError = (message = 'Error', statusCode = 500) => {
   };
 };
 
+const formatPricesForDatabase = (prices) => {
+  // If prices is a single object, convert to array
+  const pricesArray = Array.isArray(prices) ? prices : [prices];
+
+  return pricesArray.map(price => ({
+    symbol: price.symbol,
+    securityName: price.securityName,
+    securityId: price.securityId,
+    businessDate: price.businessDate,
+    openPrice: price.openPrice || 0,
+    highPrice: price.highPrice || 0,
+    lowPrice: price.lowPrice || 0,
+    closePrice: price.closePrice || 0,
+    previousClose: price.previousClose || 0,
+    change: price.change || 0,
+    percentageChange: price.percentageChange || 0,
+    totalTradedQuantity: price.totalTradedQuantity || 0,
+    totalTradedValue: price.totalTradedValue || 0,
+    totalTrades: price.totalTrades || 0,
+    averageTradedPrice: price.averageTradedPrice || 0,
+    marketCapitalization: price.marketCapitalization || 0,
+    fiftyTwoWeekHigh: price.fiftyTwoWeekHigh || 0,
+    fiftyTwoWeekLow: price.fiftyTwoWeekLow || 0,
+    lastUpdatedTime: price.lastUpdatedTime,
+    lastTradedPrice: price.lastTradedPrice || 0,
+    volume: price.volume || 0,
+    turnover: price.turnover || 0,
+    maxPrice: price.maxPrice || 0,
+    minPrice: price.minPrice || 0
+  }));
+};
+
 const formatCompanyDetailsForDatabase = (details) => {
   // If details is a single object, convert to array
   const detailsArray = Array.isArray(details) ? details : [details];
@@ -53,4 +85,4 @@ const formatCompanyDetailsForDatabase = (details) => {
   }));
 };
 
-module.exports = { formatResponse, formatError, formatCompanyDetailsForDatabase };
+module.exports = { formatResponse, formatError, formatPricesForDatabase, formatCompanyDetailsForDatabase };

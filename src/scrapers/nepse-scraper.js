@@ -13,8 +13,11 @@ class NepseScraper {
 
   async init() {
     if (!this.browser) {
+      console.log('🚀 Initializing Puppeteer browser...');
+
       const launchOptions = {
         headless: true,
+        timeout: 60000,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -29,16 +32,55 @@ class NepseScraper {
           '--no-first-run',
           '--no-default-browser-check',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
+          '--disable-features=VizDisplayCompositor',
+          '--disable-extensions',
+          '--disable-default-apps',
+          '--disable-sync',
+          '--disable-translate',
+          '--disable-background-networking',
+          '--disable-background-mode',
+          '--remote-debugging-port=0'
         ]
       };
 
       // Use system Chrome in production
       if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        console.log(`🔧 Using Chrome executable: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
         launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
+        // Check if executable exists
+        const fs = require('fs');
+        try {
+          if (fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+            console.log('✅ Chrome executable found');
+          } else {
+            console.error(`❌ Chrome executable not found at: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not verify Chrome executable existence:', e.message);
+        }
+      } else {
+        console.log('📦 Using bundled Chromium');
       }
 
-      this.browser = await puppeteer.launch(launchOptions);
+      console.log('🌐 Launching browser...');
+      try {
+        this.browser = await puppeteer.launch(launchOptions);
+        console.log('✅ Browser launched successfully');
+
+        // Test basic browser functionality
+        const page = await this.browser.newPage();
+        console.log('📄 Test page created');
+        await page.close();
+        console.log('✅ Browser test passed');
+
+      } catch (error) {
+        console.error('❌ Browser launch failed:', error.message);
+        console.error('🔍 Launch options:', JSON.stringify(launchOptions, null, 2));
+        throw error;
+      }
+    } else {
+      console.log('♻️ Reusing existing browser instance');
     }
   }
 
@@ -51,16 +93,23 @@ class NepseScraper {
 
   async scrapeMarketStatus() {
     console.log('🔍 Checking market status...');
+    console.log('⚡ Initializing browser for market status check...');
     await this.init();
 
     try {
+      console.log('📄 Creating new page for market status...');
       const page = await this.browser.newPage();
+      console.log('🔧 Setting user agent...');
       await page.setUserAgent(this.userAgent);
 
-      await page.goto(NEPSE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      console.log('🌐 Navigating to NEPSE homepage...');
+      await page.goto(NEPSE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      console.log('✅ Page loaded successfully');
 
       try {
+        console.log('⏳ Waiting for page body...');
         await page.waitForSelector('body', { timeout: 10000 });
+        console.log('📖 Reading page content...');
         const bodyText = await page.evaluate(() => document.body.innerText);
 
         const isOpen = bodyText.includes('Market Open') || bodyText.match(/Market Status[:\s]*OPEN/i);
@@ -70,6 +119,7 @@ class NepseScraper {
         if (isClosed) return false;
 
         // Fallback: time-based check
+        console.log('⏰ Using time-based market status fallback...');
         const now = DateTime.now().setZone('Asia/Kathmandu');
         const currentTime = now.hour * 100 + now.minute;
         return currentTime >= 1000 && currentTime <= 1500 && [1, 2, 3, 4, 5].includes(now.weekday);
@@ -85,35 +135,53 @@ class NepseScraper {
     }
   }
 
-  async scrapeTodayPrices() {
+  async scrapeTodayPrices(maxRetries = 3) {
     console.log('📊 Scraping today\'s prices...');
+    console.log('⚡ Initializing browser for price scraping...');
     await this.init();
 
-    try {
-      const page = await this.browser.newPage();
-      await page.setUserAgent(this.userAgent);
-
-      // Try CSV download method first (most reliable)
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this.scrapeTodayPricesCSVDownload(page);
-      } catch (csvError) {
-        console.log('⚠️ CSV download method failed, falling back to API capture...');
+        console.log(`🔄 Attempt ${attempt}/${maxRetries} - Creating new page...`);
+        const page = await this.browser.newPage();
+        console.log('🔧 Setting user agent and timeouts...');
+        await page.setUserAgent(this.userAgent);
 
-        // Try API capture method
+        // Set longer timeouts for all page operations
+        await page.setDefaultTimeout(60000);
+        await page.setDefaultNavigationTimeout(60000);
+
+        console.log('🎯 Trying CSV download method first...');
         try {
-          return await this.scrapeTodayPricesAPI(page);
-        } catch (apiError) {
-          console.log('⚠️ API capture failed, falling back to HTML scraping...');
-          return await this.scrapeTodayPricesHTML(page);
+          return await this.scrapeTodayPricesCSVDownload(page);
+        } catch (csvError) {
+          console.log(`⚠️ CSV download method failed (attempt ${attempt}): ${csvError.message}`);
+          console.log('🔄 Falling back to API capture...');
+
+          try {
+            return await this.scrapeTodayPricesAPI(page);
+          } catch (apiError) {
+            console.log(`⚠️ API capture failed (attempt ${attempt}): ${apiError.message}`);
+            console.log('🔄 Falling back to HTML scraping...');
+            return await this.scrapeTodayPricesHTML(page);
+          }
+        }
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Attempt ${attempt} failed: ${error.message}`);
+
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
-    } catch (error) {
-      console.error('❌ All scraping methods failed:', error.message);
-      throw error;
     }
-  }
 
-  async scrapeTodayPricesCSVDownload(page) {
+    console.error('❌ All scraping attempts failed');
+    throw lastError;
+  } async scrapeTodayPricesCSVDownload(page) {
     console.log('📥 Using CSV download method...');
 
     let interceptedData = null;
@@ -139,8 +207,8 @@ class NepseScraper {
     // Navigate to page
     console.log('🌐 Loading today-price page...');
     await page.goto(TODAY_PRICE_URL, {
-      waitUntil: 'networkidle2',
-      timeout: 30000
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
 
     // Wait for page to load
@@ -232,16 +300,16 @@ class NepseScraper {
 
     console.log('🌐 Loading today-price page...');
     await page.goto(TODAY_PRICE_URL, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
     });
 
     // Wait for page to load and API calls
     await page.waitForFunction(() => {
       return document.querySelector('table') ||
-        document.querySelector('[class*=\"table\"]') ||
-        document.querySelector('[class*=\"grid\"]');
-    }, { timeout: 30000 });
+        document.querySelector('[class*="table"]') ||
+        document.querySelector('[class*="grid"]');
+    }, { timeout: 45000 });
 
     await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -279,8 +347,8 @@ class NepseScraper {
 
     if (!page.url().includes('today-price')) {
       await page.goto(TODAY_PRICE_URL, {
-        waitUntil: 'networkidle2',
-        timeout: 30000
+        waitUntil: 'domcontentloaded',
+        timeout: 60000
       });
     }
 
@@ -406,7 +474,7 @@ class NepseScraper {
         const url = `https://www.nepalstock.com/company/detail/${security_id}`;
 
         try {
-          await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
           try {
             await page.waitForSelector('.company__title--details', { timeout: 5000 });
