@@ -42,4 +42,4 @@ coverage/
 *.rar
 *.7z
 .nyc_output/
-downloads
+downloads/
