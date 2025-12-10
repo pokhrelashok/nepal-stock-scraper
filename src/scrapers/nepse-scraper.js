@@ -370,7 +370,7 @@ class NepseScraper {
     }).filter(stock => stock.symbol && stock.symbol.length > 0);
   }
 
-  async scrapeAllCompanyDetails(securityIds, batchCallback = null) {
+  async scrapeAllCompanyDetails(securityIds, saveCallback = null) {
     if (!securityIds || securityIds.length === 0) return [];
 
     console.log(`🏢 Starting company details scrape for ${securityIds.length} companies...`);
@@ -508,25 +508,32 @@ class NepseScraper {
 
           const item = { securityId: security_id, symbol: symbol, ...data };
           details.push(item);
-          if (currentBatch) currentBatch.push(item);
+          if (saveCallback) {
+            currentBatch.push(item);
+          }
 
         } catch (err) {
           console.error(`❌ Failed to scrape details for ${symbol}:`, err.message);
         }
 
-        if (count % 10 === 0) {
-          console.log(`📊 Progress: ${count}/${securityIds.length}`);
-          if (batchCallback && currentBatch && currentBatch.length > 0) {
-            await batchCallback(currentBatch);
-            currentBatch = [];
+        // Save batch of 10 or when reaching end
+        if (saveCallback && (currentBatch.length >= 10 || count === securityIds.length)) {
+          if (currentBatch.length > 0) {
+            try {
+              await saveCallback(currentBatch);
+              console.log(`💾 Saved batch of ${currentBatch.length} company details (${count}/${securityIds.length})`);
+              currentBatch = [];
+            } catch (saveErr) {
+              console.error(`❌ Failed to save batch:`, saveErr.message);
+              currentBatch = [];
+            }
           }
         }
-      }
 
-      if (batchCallback && currentBatch && currentBatch.length > 0) {
-        await batchCallback(currentBatch);
+        if (count % 10 === 0) {
+          console.log(`📊 Progress: ${count}/${securityIds.length}`);
+        }
       }
-
     } catch (e) {
       console.error('❌ Error in company details scraping:', e);
     }
@@ -554,10 +561,10 @@ async function scrapeTodayPrices() {
   }
 }
 
-async function scrapeAllCompanyDetails(securityIds, batchCallback = null) {
+async function scrapeAllCompanyDetails(securityIds, saveCallback = null) {
   const scraper = new NepseScraper();
   try {
-    return await scraper.scrapeAllCompanyDetails(securityIds, batchCallback);
+    return await scraper.scrapeAllCompanyDetails(securityIds, saveCallback);
   } finally {
     await scraper.close();
   }

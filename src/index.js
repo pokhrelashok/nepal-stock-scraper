@@ -127,13 +127,12 @@ program
 
       scraper = new NepseScraper();
 
-      const batchCallback = options.save ? async (batch) => {
+      const saveCallback = options.save ? async (batch) => {
         const formattedDetails = formatCompanyDetailsForDatabase(batch);
         await insertCompanyDetails(formattedDetails);
-        console.log(`💾 Saved batch of ${batch.length} company details`);
       } : null;
 
-      const details = await scraper.scrapeAllCompanyDetails(targetIds, batchCallback);
+      const details = await scraper.scrapeAllCompanyDetails(targetIds, saveCallback);
 
       console.log(`✅ Scraped details for ${details.length} companies`);
 

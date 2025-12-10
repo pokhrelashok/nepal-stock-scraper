@@ -9,8 +9,11 @@ const {
   getAllCompanies,
   getCompaniesBySector,
   getTopCompaniesByMarketCap,
-  getCompanyStats
+  getCompanyStats,
+  getCurrentMarketStatus,
+  updateMarketStatus
 } = require('./database/queries');
+const { NepseScraper } = require('./scrapers/nepse-scraper');
 const { formatResponse, formatError } = require('./utils/formatter');
 
 const app = express();
@@ -185,7 +188,48 @@ app.get('/api/market/stats', async (req, res) => {
   }
 });
 
-// New enhanced endpoints
+// Market status endpoint
+app.get('/api/market/status', async (req, res) => {
+  try {
+    const refresh = req.query.refresh === 'true';
+
+    if (refresh) {
+      // Get live status from scraper
+      const scraper = new NepseScraper();
+      try {
+        const isOpen = await scraper.scrapeMarketStatus();
+        await updateMarketStatus(isOpen);
+
+        res.json(formatResponse({
+          isOpen,
+          status: isOpen ? 'OPEN' : 'CLOSED',
+          source: 'LIVE_SCRAPER',
+          lastUpdated: new Date().toISOString()
+        }));
+      } finally {
+        await scraper.close();
+      }
+    } else {
+      // Get cached status from database
+      const marketStatus = await getCurrentMarketStatus();
+      if (marketStatus) {
+        res.json(formatResponse({
+          isOpen: marketStatus.isOpen,
+          status: marketStatus.isOpen ? 'OPEN' : 'CLOSED',
+          source: 'DATABASE_CACHE',
+          lastUpdated: marketStatus.lastUpdated,
+          tradingDate: marketStatus.tradingDate
+        }));
+      } else {
+        // No cached data, get live status
+        return res.redirect('/api/market/status?refresh=true');
+      }
+    }
+  } catch (error) {
+    console.error('API Market Status Error:', error);
+    res.status(500).json(formatError('Failed to get market status'));
+  }
+});// New enhanced endpoints
 app.get('/api/today-prices', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;

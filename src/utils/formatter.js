@@ -14,4 +14,43 @@ const formatError = (message = 'Error', statusCode = 500) => {
   };
 };
 
-module.exports = { formatResponse, formatError };
+const formatCompanyDetailsForDatabase = (details) => {
+  // If details is a single object, convert to array
+  const detailsArray = Array.isArray(details) ? details : [details];
+
+  return detailsArray.map(detail => ({
+    securityId: detail.securityId,
+    symbol: detail.symbol,
+    companyName: detail.companyName,
+    sectorName: detail.sectorName,
+    instrumentType: detail.instrumentType,
+    issueManager: detail.issueManager,
+    shareRegistrar: detail.shareRegistrar,
+    listingDate: detail.listingDate,
+    totalListedShares: detail.totalListedShares,
+    paidUpCapital: detail.paidUpCapital,
+    totalPaidUpValue: detail.totalPaidUpValue,
+    email: detail.email,
+    website: detail.website,
+    status: detail.status,
+    permittedToTrade: detail.permittedToTrade,
+    promoterShares: detail.promoterShares,
+    publicShares: detail.publicShares,
+    marketCapitalization: detail.marketCapitalization,
+    logoUrl: detail.logoUrl,
+    isLogoPlaceholder: detail.isLogoPlaceholder,
+    lastTradedPrice: detail.lastTradedPrice,
+    openPrice: detail.openPrice,
+    closePrice: detail.closePrice,
+    highPrice: detail.highPrice,
+    lowPrice: detail.lowPrice,
+    previousClose: detail.previousClose,
+    fiftyTwoWeekHigh: detail.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: detail.fiftyTwoWeekLow,
+    totalTradedQuantity: detail.totalTradedQuantity,
+    totalTrades: detail.totalTrades,
+    averageTradedPrice: detail.averageTradedPrice
+  }));
+};
+
+module.exports = { formatResponse, formatError, formatCompanyDetailsForDatabase };

@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
-const { insertTodayPrices } = require('./database/queries');
+const { insertTodayPrices, updateMarketStatus } = require('./database/queries');
 const { formatPricesForDatabase } = require('./utils/formatter');
 
 class Scheduler {
@@ -18,38 +18,61 @@ class Scheduler {
 
     console.log('🚀 Starting price update scheduler...');
 
-    const job = cron.schedule('*/15 10-15 * * 1-5', async () => {
-      console.log('🕐 Scheduled price update started...');
-      try {
-        const isOpen = await this.scraper.scrapeMarketStatus();
-        if (isOpen) {
-          console.log('✅ Market is open, updating prices...');
-          const prices = await this.scraper.scrapeTodayPrices();
-          if (prices && prices.length > 0) {
-            const formattedPrices = formatPricesForDatabase(prices);
-            await insertTodayPrices(formattedPrices);
-            console.log(`✅ Updated ${prices.length} stock prices`);
-          } else {
-            console.log('⚠️ No price data received');
-          }
-        } else {
-          console.log('🔒 Market is closed, skipping price update');
-        }
-      } catch (error) {
-        console.error('❌ Scheduled price update failed:', error.message);
-      }
+    // Price updates every 15 minutes during market hours (10 AM - 3 PM)
+    const priceJob = cron.schedule('*/15 10-15 * * 1-5', async () => {
+      await this.updatePricesAndStatus('DURING_HOURS');
     }, {
       scheduled: false,
       timezone: 'Asia/Kathmandu'
     });
 
-    this.jobs.set('priceUpdate', job);
-    job.start();
+    // Market close status update (2 minutes after 3 PM)
+    const closeJob = cron.schedule('2 15 * * 1-5', async () => {
+      await this.updatePricesAndStatus('AFTER_CLOSE');
+    }, {
+      scheduled: false,
+      timezone: 'Asia/Kathmandu'
+    });
+
+    this.jobs.set('priceUpdate', priceJob);
+    this.jobs.set('closeUpdate', closeJob);
+
+    priceJob.start();
+    closeJob.start();
+
     this.isRunning = true;
-    console.log('📅 Price update schedule started (every 15 minutes during trading hours)');
+    console.log('📅 Price update schedule started (every 15 min during hours + close update)');
   }
 
-  async stopPriceUpdateSchedule() {
+  async updatePricesAndStatus(phase) {
+    console.log(`🕐 Scheduled ${phase === 'AFTER_CLOSE' ? 'close' : 'price'} update started...`);
+
+    try {
+      const isOpen = await this.scraper.scrapeMarketStatus();
+
+      // Always update market status
+      await updateMarketStatus(isOpen);
+      console.log(`📊 Market status updated: ${isOpen ? 'OPEN' : 'CLOSED'}`);
+
+      if (phase === 'DURING_HOURS' && isOpen) {
+        console.log('✅ Market is open, updating prices...');
+        const prices = await this.scraper.scrapeTodayPrices();
+        if (prices && prices.length > 0) {
+          const formattedPrices = formatPricesForDatabase(prices);
+          await insertTodayPrices(formattedPrices);
+          console.log(`✅ Updated ${prices.length} stock prices`);
+        } else {
+          console.log('⚠️ No price data received');
+        }
+      } else if (phase === 'AFTER_CLOSE') {
+        console.log('🔒 Post-market close status update completed');
+      } else {
+        console.log('🔒 Market is closed, skipping price update');
+      }
+    } catch (error) {
+      console.error('❌ Scheduled update failed:', error.message);
+    }
+  } async stopPriceUpdateSchedule() {
     const job = this.jobs.get('priceUpdate');
     if (job) {
       job.stop();

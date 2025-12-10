@@ -1,4 +1,13 @@
-const { db } = require('./database');
+const { db, savePrices, saveCompanyDetails } = require('./database');
+
+// Wrapper functions for database operations
+function insertTodayPrices(prices) {
+  return savePrices(prices);
+}
+
+function insertCompanyDetails(details) {
+  return saveCompanyDetails(details);
+}
 
 function getAllSecurityIds() {
   return new Promise((resolve, reject) => {
@@ -184,13 +193,131 @@ function getCompanyStats() {
   });
 }
 
+// Market status functions
+function insertMarketStatus(status, tradingDate, openTime = null, closeTime = null, additionalInfo = null) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      INSERT OR REPLACE INTO market_status (
+        status, trading_date, market_open_time, market_close_time, 
+        is_trading_day, additional_info, last_updated
+      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `;
+
+    const isTradingDay = status !== 'CLOSED' || (openTime && closeTime) ? 1 : 0;
+
+    db.run(sql, [status, tradingDate, openTime, closeTime, isTradingDay, additionalInfo], function (err) {
+      if (err) {
+        console.error('Error inserting market status:', err);
+        reject(err);
+      } else {
+        resolve(this.lastID);
+      }
+    });
+  });
+}
+
+function getCurrentMarketStatus() {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT * FROM market_status 
+      WHERE trading_date = date('now', '+5:45 hours') 
+      ORDER BY last_updated DESC 
+      LIMIT 1
+    `;
+
+    db.get(sql, [], (err, row) => {
+      if (err) {
+        console.error('Error getting current market status:', err);
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+}
+
+function getMarketStatusHistory(days = 7) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        trading_date,
+        status,
+        market_open_time,
+        market_close_time,
+        is_trading_day,
+        last_updated,
+        additional_info
+      FROM market_status 
+      WHERE trading_date >= date('now', '+5:45 hours', '-' || ? || ' days')
+      ORDER BY trading_date DESC, last_updated DESC
+    `;
+
+    db.all(sql, [days], (err, rows) => {
+      if (err) {
+        console.error('Error getting market status history:', err);
+        reject(err);
+      } else {
+        resolve(rows || []);
+      }
+    });
+  });
+}
+
+// Market status functions
+function updateMarketStatus(isOpen) {
+  return new Promise((resolve, reject) => {
+    const now = new Date();
+    const nepaliDate = new Date(now.getTime() + (5.75 * 60 * 60 * 1000));
+    const tradingDate = nepaliDate.toISOString().split('T')[0];
+
+    const sql = `
+      INSERT OR REPLACE INTO market_status (id, is_open, trading_date, last_updated)
+      VALUES (
+        1, ?, ?, CURRENT_TIMESTAMP
+      )
+    `;
+
+    db.run(sql, [isOpen ? 1 : 0, tradingDate], function (err) {
+      if (err) {
+        console.error('Error updating market status:', err);
+        reject(err);
+      } else {
+        resolve(this.lastID);
+      }
+    });
+  });
+}
+
+function getCurrentMarketStatus() {
+  return new Promise((resolve, reject) => {
+    const sql = `SELECT is_open, last_updated, trading_date FROM market_status WHERE id = 1`;
+
+    db.get(sql, [], (err, row) => {
+      if (err) {
+        console.error('Error getting current market status:', err);
+        reject(err);
+      } else {
+        resolve(row ? {
+          isOpen: Boolean(row.is_open),
+          lastUpdated: row.last_updated,
+          tradingDate: row.trading_date
+        } : null);
+      }
+    });
+  });
+}
+
 module.exports = {
-  getAllSecurityIds,
   searchStocks,
   getScriptDetails,
   getLatestPrices,
   getAllCompanies,
   getCompaniesBySector,
   getTopCompaniesByMarketCap,
-  getCompanyStats
+  getCompanyStats,
+  getAllSecurityIds,
+  insertTodayPrices,
+  insertCompanyDetails,
+  updateMarketStatus,
+  getCurrentMarketStatus
 };

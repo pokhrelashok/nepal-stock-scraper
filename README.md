@@ -55,6 +55,8 @@ npm test
 | GET | `/api/companies/sector/SECTOR` | Filter companies by sector |
 | GET | `/api/companies/top/N` | Top N companies by market cap |
 | GET | `/api/market/stats` | Market statistics and insights |
+| **GET** | **`/api/market/status`** | **Get current market status (cached)** |
+| **GET** | **`/api/market/status?refresh=true`** | **Get live market status** |
 | GET | `/api/search?q=QUERY` | Search stocks by symbol or name |
 | POST | `/api/prices` | Get latest prices for multiple symbols |
 | **POST** | **`/api/scheduler/start`** | **Start the automated price scheduler** |
