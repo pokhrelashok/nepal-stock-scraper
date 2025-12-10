@@ -3,7 +3,7 @@
 const { program } = require('commander');
 const Scheduler = require('./scheduler');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
-const { getAllSecurityIds, insertTodayPrices, insertCompanyDetails } = require('./database/queries');
+const { getAllSecurityIds, getSecurityIdsWithoutDetails, insertTodayPrices, insertCompanyDetails } = require('./database/queries');
 const { formatPricesForDatabase, formatCompanyDetailsForDatabase } = require('./utils/formatter');
 const { db } = require('./database/database');
 const fs = require('fs');
@@ -114,11 +114,26 @@ program
   .option('-s, --save', 'Save to database')
   .option('-f, --file <filename>', 'Save to JSON file')
   .option('-l, --limit <number>', 'Limit number of companies to scrape', parseInt)
+  .option('-m, --missing', 'Only scrape companies that don\'t have details in the database yet')
   .action(async (options) => {
     try {
       console.log('📋 Getting security IDs...');
-      const securityIds = await getAllSecurityIds(); if (securityIds.length === 0) {
-        console.log('⚠️ No security IDs found. Please scrape prices first.');
+
+      let securityIds;
+      if (options.missing) {
+        securityIds = await getSecurityIdsWithoutDetails();
+        console.log(`🔍 Found ${securityIds.length} companies without details in database`);
+      } else {
+        securityIds = await getAllSecurityIds();
+        console.log(`📊 Found ${securityIds.length} total companies`);
+      }
+
+      if (securityIds.length === 0) {
+        if (options.missing) {
+          console.log('✅ All companies already have details in the database!');
+        } else {
+          console.log('⚠️ No security IDs found. Please scrape prices first.');
+        }
         return;
       }
 

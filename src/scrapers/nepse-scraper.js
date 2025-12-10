@@ -405,128 +405,139 @@ class NepseScraper {
             }
           } catch (e) { }
 
-          const data = await page.evaluate(() => {
-            const info = {};
+          let data;
+          try {
+            data = await page.evaluate(() => {
+              const info = {};
 
-            const clean = (text) => text ? text.replace(/\s+/g, ' ').trim() : '';
-            const parseNumber = (text) => {
-              if (!text) return 0;
-              return parseFloat(text.replace(/,/g, '').replace(/[^0-9.-]/g, '')) || 0;
-            };
+              const clean = (text) => text ? text.replace(/\s+/g, ' ').trim() : '';
+              const parseNumber = (text) => {
+                if (!text) return 0;
+                return parseFloat(text.replace(/,/g, '').replace(/[^0-9.-]/g, '')) || 0;
+              };
 
-            let logoImg = document.querySelector('#profile_section .team-member img');
-            if (!logoImg || logoImg.getAttribute('src').includes('placeholder')) {
-              logoImg = document.querySelector('.company__title--logo img');
-            }
-            info.rawLogoData = logoImg ? logoImg.getAttribute('src') : '';
-            if (info.rawLogoData && info.rawLogoData.startsWith('assets/')) {
-              info.rawLogoData = `https://www.nepalstock.com/${info.rawLogoData}`;
-            }
-            info.isLogoPlaceholder = info.rawLogoData.includes('placeholder');
-
-            const companyNameEl = document.querySelector('.company__title--details h1');
-            let companyName = companyNameEl ? clean(companyNameEl.innerText) : '';
-            // Remove symbol in parentheses from company name (e.g., "Company Name (SYMBOL)" -> "Company Name")
-            info.companyName = companyName.replace(/\s*\([A-Z]+\)\s*$/, '').trim();
-
-            const metaItems = document.querySelectorAll('.company__title--metas li');
-            metaItems.forEach(li => {
-              const text = li.innerText;
-              if (text.includes('Sector:')) {
-                info.sectorName = clean(text.split('Sector:')[1]);
-              } else if (text.includes('Email Address:')) {
-                info.email = clean(text.split('Email Address:')[1]);
-              } else if (text.includes('Status:')) {
-                info.status = clean(text.split('Status:')[1]);
-              } else if (text.includes('Permitted to Trade:')) {
-                info.permittedToTrade = clean(text.split('Permitted to Trade:')[1]);
+              let logoImg = document.querySelector('#profile_section .team-member img');
+              if (!logoImg || logoImg.getAttribute('src').includes('placeholder')) {
+                logoImg = document.querySelector('.company__title--logo img');
               }
+              info.rawLogoData = logoImg ? logoImg.getAttribute('src') : '';
+              if (info.rawLogoData && info.rawLogoData.startsWith('assets/')) {
+                info.rawLogoData = `https://www.nepalstock.com/${info.rawLogoData}`;
+              }
+              info.isLogoPlaceholder = info.rawLogoData.includes('placeholder');
+
+              const companyNameEl = document.querySelector('.company__title--details h1');
+              let companyName = companyNameEl ? clean(companyNameEl.innerText) : '';
+              // Remove symbol in parentheses from company name (e.g., "Company Name (SYMBOL)" -> "Company Name")
+              info.companyName = companyName.replace(/\s*\([A-Z]+\)\s*$/, '').trim();
+
+              const metaItems = document.querySelectorAll('.company__title--metas li');
+              metaItems.forEach(li => {
+                const text = li.innerText;
+                if (text.includes('Sector:')) {
+                  info.sectorName = clean(text.split('Sector:')[1]);
+                } else if (text.includes('Email Address:')) {
+                  info.email = clean(text.split('Email Address:')[1]);
+                } else if (text.includes('Status:')) {
+                  info.status = clean(text.split('Status:')[1]);
+                } else if (text.includes('Permitted to Trade:')) {
+                  info.permittedToTrade = clean(text.split('Permitted to Trade:')[1]);
+                }
+              });
+
+              const getTableValue = (label) => {
+                const rows = Array.from(document.querySelectorAll('table tr'));
+                for (const row of rows) {
+                  const th = row.querySelector('th');
+                  const td = row.querySelector('td');
+                  if (th && td && th.innerText.trim().includes(label)) {
+                    return clean(td.innerText);
+                  }
+                }
+                return null;
+              };
+
+              info.instrumentType = getTableValue('Instrument Type') || '';
+              info.listingDate = getTableValue('Listing Date') || '';
+
+              const lastTradedPriceCell = getTableValue('Last Traded Price');
+              if (lastTradedPriceCell) {
+                const priceMatch = lastTradedPriceCell.match(/([0-9,]+\.?[0-9]*)/);
+                info.lastTradedPrice = priceMatch ? parseNumber(priceMatch[1]) : 0;
+              } else {
+                info.lastTradedPrice = 0;
+              }
+
+              info.totalTradedQuantity = parseNumber(getTableValue('Total Traded Quantity'));
+              info.totalTrades = parseInt(parseNumber(getTableValue('Total Trades')), 10);
+              info.previousClose = parseNumber(getTableValue('Previous Day Close Price'));
+
+              const highLowText = getTableValue('High Price / Low Price');
+              if (highLowText) {
+                const parts = highLowText.split('/');
+                info.highPrice = parts[0] ? parseNumber(parts[0]) : 0;
+                info.lowPrice = parts[1] ? parseNumber(parts[1]) : 0;
+              } else {
+                info.highPrice = 0;
+                info.lowPrice = 0;
+              }
+
+              const fiftyTwoWeekText = getTableValue('52 Week High / 52 Week Low');
+              if (fiftyTwoWeekText) {
+                const parts = fiftyTwoWeekText.split('/');
+                info.fiftyTwoWeekHigh = parts[0] ? parseNumber(parts[0]) : 0;
+                info.fiftyTwoWeekLow = parts[1] ? parseNumber(parts[1]) : 0;
+              } else {
+                info.fiftyTwoWeekHigh = 0;
+                info.fiftyTwoWeekLow = 0;
+              }
+
+              info.openPrice = parseNumber(getTableValue('Open Price'));
+
+              const closePriceText = getTableValue('Close Price');
+              info.closePrice = parseNumber(closePriceText ? closePriceText.replace('*', '') : '0');
+
+              info.totalListedShares = parseNumber(getTableValue('Total Listed Shares'));
+              info.totalPaidUpValue = parseNumber(getTableValue('Total Paid up Value'));
+              info.marketCapitalization = parseNumber(getTableValue('Market Capitalization'));
+              info.paidUpCapital = info.totalPaidUpValue || parseNumber(getTableValue('Paid Up Capital'));
+              info.issueManager = getTableValue('Issue Manager') || '';
+              info.shareRegistrar = getTableValue('Share Registrar') || '';
+              info.website = getTableValue('Website') || '';
+              info.promoterShares = parseNumber(getTableValue('Promoter Shares'));
+              info.publicShares = parseNumber(getTableValue('Public Shares'));
+              info.averageTradedPrice = parseNumber(getTableValue('Average Traded Price'));
+
+              return info;
             });
 
-            const getTableValue = (label) => {
-              const rows = Array.from(document.querySelectorAll('table tr'));
-              for (const row of rows) {
-                const th = row.querySelector('th');
-                const td = row.querySelector('td');
-                if (th && td && th.innerText.trim().includes(label)) {
-                  return clean(td.innerText);
-                }
-              }
-              return null;
+            // Process the logo image - save base64 images, ignore URLs
+            const processedLogoUrl = await processImageData(data.rawLogoData, symbol);
+
+            const item = {
+              securityId: security_id,
+              symbol: symbol,
+              ...data,
+              logoUrl: processedLogoUrl // Replace with processed URL or null
             };
 
-            info.instrumentType = getTableValue('Instrument Type') || '';
-            info.listingDate = getTableValue('Listing Date') || '';
+            // Remove rawLogoData from the final item
+            delete item.rawLogoData;
 
-            const lastTradedPriceCell = getTableValue('Last Traded Price');
-            if (lastTradedPriceCell) {
-              const priceMatch = lastTradedPriceCell.match(/([0-9,]+\.?[0-9]*)/);
-              info.lastTradedPrice = priceMatch ? parseNumber(priceMatch[1]) : 0;
-            } else {
-              info.lastTradedPrice = 0;
+            details.push(item);
+            if (saveCallback) {
+              currentBatch.push(item);
             }
 
-            info.totalTradedQuantity = parseNumber(getTableValue('Total Traded Quantity'));
-            info.totalTrades = parseInt(parseNumber(getTableValue('Total Trades')), 10);
-            info.previousClose = parseNumber(getTableValue('Previous Day Close Price'));
-
-            const highLowText = getTableValue('High Price / Low Price');
-            if (highLowText) {
-              const parts = highLowText.split('/');
-              info.highPrice = parts[0] ? parseNumber(parts[0]) : 0;
-              info.lowPrice = parts[1] ? parseNumber(parts[1]) : 0;
-            } else {
-              info.highPrice = 0;
-              info.lowPrice = 0;
-            }
-
-            const fiftyTwoWeekText = getTableValue('52 Week High / 52 Week Low');
-            if (fiftyTwoWeekText) {
-              const parts = fiftyTwoWeekText.split('/');
-              info.fiftyTwoWeekHigh = parts[0] ? parseNumber(parts[0]) : 0;
-              info.fiftyTwoWeekLow = parts[1] ? parseNumber(parts[1]) : 0;
-            } else {
-              info.fiftyTwoWeekHigh = 0;
-              info.fiftyTwoWeekLow = 0;
-            }
-
-            info.openPrice = parseNumber(getTableValue('Open Price'));
-
-            const closePriceText = getTableValue('Close Price');
-            info.closePrice = parseNumber(closePriceText ? closePriceText.replace('*', '') : '0');
-
-            info.totalListedShares = parseNumber(getTableValue('Total Listed Shares'));
-            info.totalPaidUpValue = parseNumber(getTableValue('Total Paid up Value'));
-            info.marketCapitalization = parseNumber(getTableValue('Market Capitalization'));
-            info.paidUpCapital = info.totalPaidUpValue || parseNumber(getTableValue('Paid Up Capital'));
-            info.issueManager = getTableValue('Issue Manager') || '';
-            info.shareRegistrar = getTableValue('Share Registrar') || '';
-            info.website = getTableValue('Website') || '';
-            info.promoterShares = parseNumber(getTableValue('Promoter Shares'));
-            info.publicShares = parseNumber(getTableValue('Public Shares'));
-            info.averageTradedPrice = parseNumber(getTableValue('Average Traded Price'));
-
-            return info;
-          });
-
-          // Process the logo image - save base64 images, ignore URLs
-          const processedLogoUrl = await processImageData(data.rawLogoData, symbol);
-
-          const item = {
-            securityId: security_id,
-            symbol: symbol,
-            ...data,
-            logoUrl: processedLogoUrl // Replace with processed URL or null
-          };
-
-          // Remove rawLogoData from the final item
-          delete item.rawLogoData;
-
-          details.push(item);
-          if (saveCallback) {
-            currentBatch.push(item);
+          } catch (evalError) {
+            console.error(`❌ Failed to evaluate page for ${symbol}:`, evalError.message);
+            // Continue with empty data if page evaluation fails
+            data = {
+              companyName: symbol,
+              rawLogoData: '',
+              isLogoPlaceholder: true
+            };
           }
-
         } catch (err) {
           console.error(`❌ Failed to scrape details for ${symbol}:`, err.message);
         }

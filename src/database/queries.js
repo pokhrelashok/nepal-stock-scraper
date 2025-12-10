@@ -18,6 +18,23 @@ function getAllSecurityIds() {
   });
 }
 
+function getSecurityIdsWithoutDetails() {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT DISTINCT sp.security_id, sp.symbol 
+      FROM stock_prices sp
+      LEFT JOIN company_details cd ON sp.symbol = cd.symbol
+      WHERE sp.security_id > 0 AND cd.symbol IS NULL
+      ORDER BY sp.symbol
+    `;
+
+    db.all(sql, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
 function searchStocks(query) {
   return new Promise((resolve, reject) => {
     const pattern = `%${query}%`;
@@ -316,6 +333,7 @@ module.exports = {
   getTopCompaniesByMarketCap,
   getCompanyStats,
   getAllSecurityIds,
+  getSecurityIdsWithoutDetails,
   insertTodayPrices,
   insertCompanyDetails,
   updateMarketStatus,
