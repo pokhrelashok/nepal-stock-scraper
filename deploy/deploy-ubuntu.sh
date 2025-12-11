@@ -165,16 +165,23 @@ chown -R $APP_USER:$APP_USER $APP_DIR
 
 # Switch to app user for Node.js operations
 echo "📦 Installing Node.js dependencies..."
-sudo -u $APP_USER bash << 'DEPS_EOF'
-cd $APP_DIR
-npm ci --production
+sudo -u $APP_USER bash << DEPS_EOF
+set -e
+cd "$APP_DIR"
+if [ -f package-lock.json ]; then
+    npm ci --omit=dev
+else
+    echo "ℹ️ package-lock.json not found, using npm install --omit=dev"
+    npm install --omit=dev
+fi
 mkdir -p logs public/images
 DEPS_EOF
 
 # Initialize database
 echo "🗃️ Initializing database..."
-sudo -u $APP_USER bash << 'DB_EOF'
-cd $APP_DIR
+sudo -u $APP_USER bash << DB_EOF
+set -e
+cd "$APP_DIR"
 node src/database/database.js
 DB_EOF
 
@@ -225,9 +232,10 @@ sed -i "s|APP_DIR_PLACEHOLDER|$APP_DIR|g" /etc/systemd/system/nepse-pm2.service
 
 # Initialize PM2 for the app user and start services
 echo "🚀 Starting PM2 services..."
-sudo -u $APP_USER bash << 'PM2_START_EOF'
-cd $APP_DIR
-export PM2_HOME=/home/$APP_USER/.pm2
+sudo -u $APP_USER bash << PM2_START_EOF
+set -e
+cd "$APP_DIR"
+export PM2_HOME="/home/$APP_USER/.pm2"
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup systemd -u $APP_USER --hp /home/$APP_USER
@@ -389,7 +397,7 @@ echo "📝 Creating maintenance scripts..."
 cat > /usr/local/bin/nepse-status << EOL
 #!/bin/bash
 echo "=== NEPSE API Status ==="
-sudo -u $APP_USER bash -c 'export NVM_DIR="\$HOME/.nvm"; [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"; nvm use default; pm2 status'
+sudo -u $APP_USER bash -c 'export PM2_HOME="/home/$APP_USER/.pm2"; pm2 status'
 echo ""
 echo "=== Nginx Status ==="
 systemctl status nginx --no-pager -l
@@ -405,7 +413,7 @@ chmod +x /usr/local/bin/nepse-status
 cat > /usr/local/bin/nepse-logs << EOL
 #!/bin/bash
 echo "=== Recent API Logs ==="
-sudo -u $APP_USER bash -c 'export NVM_DIR="\$HOME/.nvm"; [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"; nvm use default; pm2 logs --lines 50'
+sudo -u $APP_USER bash -c 'export PM2_HOME="/home/$APP_USER/.pm2"; pm2 logs --lines 50'
 EOL
 chmod +x /usr/local/bin/nepse-logs
 
