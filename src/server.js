@@ -12,7 +12,9 @@ const {
   getTopCompaniesByMarketCap,
   getCompanyStats,
   getCurrentMarketStatus,
-  updateMarketStatus
+  updateMarketStatus,
+  getMarketIndexData,
+  saveMarketIndex
 } = require('./database/queries');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
 const { formatResponse, formatError } = require('./utils/formatter');
@@ -225,15 +227,28 @@ app.get('/api/market/status', async (req, res) => {
     const refresh = req.query.refresh === 'true';
 
     if (refresh) {
-      // Get live status from scraper
+      // Get live status and index data from scraper
       const scraper = new NepseScraper();
       try {
         const isOpen = await scraper.scrapeMarketStatus();
+        const indexData = await scraper.scrapeMarketIndex();
+
         await updateMarketStatus(isOpen);
+        await saveMarketIndex(indexData);
 
         res.json(formatResponse({
           isOpen,
           status: isOpen ? 'OPEN' : 'CLOSED',
+          marketIndex: {
+            nepseIndex: indexData.nepseIndex,
+            change: indexData.indexChange,
+            percentageChange: indexData.indexPercentageChange,
+            totalTurnover: indexData.totalTurnover,
+            totalTradedShares: indexData.totalTradedShares,
+            advanced: indexData.advanced,
+            declined: indexData.declined,
+            unchanged: indexData.unchanged
+          },
           source: 'LIVE_SCRAPER',
           lastUpdated: new Date().toISOString()
         }));
@@ -243,14 +258,32 @@ app.get('/api/market/status', async (req, res) => {
     } else {
       // Get cached status from database
       const marketStatus = await getCurrentMarketStatus();
-      if (marketStatus) {
-        res.json(formatResponse({
-          isOpen: marketStatus.isOpen,
-          status: marketStatus.isOpen ? 'OPEN' : 'CLOSED',
-          source: 'DATABASE_CACHE',
-          lastUpdated: marketStatus.lastUpdated,
-          tradingDate: marketStatus.tradingDate
-        }));
+      const marketIndex = await getMarketIndexData();
+
+      const response = {
+        isOpen: marketStatus?.isOpen || false,
+        status: marketStatus?.isOpen ? 'OPEN' : 'CLOSED',
+        source: 'DATABASE_CACHE',
+        lastUpdated: marketStatus?.lastUpdated || new Date().toISOString(),
+        tradingDate: marketStatus?.tradingDate || null
+      };
+
+      // Add market index data if available
+      if (marketIndex) {
+        response.marketIndex = {
+          nepseIndex: marketIndex.nepse_index,
+          change: marketIndex.index_change,
+          percentageChange: marketIndex.index_percentage_change,
+          totalTurnover: marketIndex.total_turnover,
+          totalTradedShares: marketIndex.total_traded_shares,
+          advanced: marketIndex.advanced,
+          declined: marketIndex.declined,
+          unchanged: marketIndex.unchanged
+        };
+      }
+
+      if (marketStatus || marketIndex) {
+        res.json(formatResponse(response));
       } else {
         // No cached data, get live status
         return res.redirect('/api/market/status?refresh=true');

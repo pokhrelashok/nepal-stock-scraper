@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
-const { insertTodayPrices, updateMarketStatus } = require('./database/queries');
+const { insertTodayPrices, updateMarketStatus, saveMarketIndex } = require('./database/queries');
 const { formatPricesForDatabase } = require('./utils/formatter');
 
 class Scheduler {
@@ -53,6 +53,15 @@ class Scheduler {
       // Always update market status
       await updateMarketStatus(isOpen);
       console.log(`📊 Market status updated: ${isOpen ? 'OPEN' : 'CLOSED'}`);
+
+      // Scrape and save market index data
+      try {
+        const indexData = await this.scraper.scrapeMarketIndex();
+        await saveMarketIndex(indexData);
+        console.log(`📈 Market index updated: ${indexData.nepseIndex} (${indexData.indexChange})`);
+      } catch (indexError) {
+        console.warn('⚠️ Failed to update market index:', indexError.message);
+      }
 
       if (phase === 'DURING_HOURS' && isOpen) {
         console.log('✅ Market is open, updating prices...');

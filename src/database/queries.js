@@ -324,6 +324,120 @@ function getCurrentMarketStatus() {
   });
 }
 
+// Market index functions
+function saveMarketIndex(indexData) {
+  return new Promise((resolve, reject) => {
+    const {
+      nepseIndex,
+      indexChange,
+      indexPercentageChange,
+      totalTurnover,
+      totalTradedShares,
+      advanced,
+      declined,
+      unchanged,
+      tradingDate = null
+    } = indexData;
+
+    // Get today's date in Nepal timezone if not provided
+    const date = tradingDate || (() => {
+      const now = new Date();
+      const nepaliDate = new Date(now.getTime() + (5.75 * 60 * 60 * 1000));
+      return nepaliDate.toISOString().split('T')[0];
+    })();
+
+    const sql = `
+      INSERT OR REPLACE INTO market_index (
+        trading_date, nepse_index, index_change, index_percentage_change,
+        total_turnover, total_traded_shares, advanced, declined, unchanged,
+        last_updated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `;
+
+    db.run(
+      sql,
+      [date, nepseIndex, indexChange, indexPercentageChange, totalTurnover, totalTradedShares, advanced, declined, unchanged],
+      function (err) {
+        if (err) {
+          console.error('Error saving market index:', err);
+          reject(err);
+        } else {
+          console.log('✅ Market index saved successfully');
+          resolve(this.lastID);
+        }
+      }
+    );
+  });
+}
+
+function getMarketIndexData(tradingDate = null) {
+  return new Promise((resolve, reject) => {
+    // Get today's date in Nepal timezone if not provided
+    const date = tradingDate || (() => {
+      const now = new Date();
+      const nepaliDate = new Date(now.getTime() + (5.75 * 60 * 60 * 1000));
+      return nepaliDate.toISOString().split('T')[0];
+    })();
+
+    const sql = `
+      SELECT 
+        nepse_index,
+        index_change,
+        index_percentage_change,
+        total_turnover,
+        total_traded_shares,
+        advanced,
+        declined,
+        unchanged,
+        trading_date,
+        last_updated
+      FROM market_index 
+      WHERE trading_date = ?
+      ORDER BY last_updated DESC
+      LIMIT 1
+    `;
+
+    db.get(sql, [date], (err, row) => {
+      if (err) {
+        console.error('Error getting market index data:', err);
+        reject(err);
+      } else {
+        resolve(row || null);
+      }
+    });
+  });
+}
+
+function getMarketIndexHistory(days = 7) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      SELECT 
+        nepse_index,
+        index_change,
+        index_percentage_change,
+        total_turnover,
+        total_traded_shares,
+        advanced,
+        declined,
+        unchanged,
+        trading_date,
+        last_updated
+      FROM market_index 
+      WHERE trading_date >= date('now', '+5:45 hours', '-' || ? || ' days')
+      ORDER BY trading_date DESC, last_updated DESC
+    `;
+
+    db.all(sql, [days], (err, rows) => {
+      if (err) {
+        console.error('Error getting market index history:', err);
+        reject(err);
+      } else {
+        resolve(rows || []);
+      }
+    });
+  });
+}
+
 module.exports = {
   searchStocks,
   getScriptDetails,
@@ -337,5 +451,8 @@ module.exports = {
   insertTodayPrices,
   insertCompanyDetails,
   updateMarketStatus,
-  getCurrentMarketStatus
+  getCurrentMarketStatus,
+  saveMarketIndex,
+  getMarketIndexData,
+  getMarketIndexHistory
 };

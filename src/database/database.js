@@ -72,6 +72,22 @@ function initSchema() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_company_details_symbol ON company_details(symbol);
+
+    CREATE TABLE IF NOT EXISTS market_index (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trading_date TEXT NOT NULL,
+        nepse_index REAL,
+        index_change REAL,
+        index_percentage_change REAL,
+        total_turnover REAL,
+        total_traded_shares INTEGER,
+        advanced INTEGER,
+        declined INTEGER,
+        unchanged INTEGER,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(trading_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_market_index_date ON market_index(trading_date);
     `;
 
   db.exec(schema, (err) => {

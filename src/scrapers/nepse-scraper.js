@@ -650,6 +650,164 @@ class NepseScraper {
 
     return details;
   }
+
+  async scrapeMarketIndex() {
+    console.log('📈 Scraping market index data...');
+    console.log('⚡ Initializing browser for market index scrape...');
+    await this.init();
+
+    try {
+      const page = await this.browser.newPage();
+      await page.setUserAgent(this.userAgent);
+
+      console.log('🌐 Navigating to NEPSE homepage...');
+      await page.goto(NEPSE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      console.log('✅ Page loaded successfully');
+
+      // Wait for market index section to be visible
+      await page.waitForSelector('[class*="market-index"], [class*="nepse-index"], .index-section, [class*="index"]', { timeout: 10000 }).catch(() => {
+        console.log('⚠️ Could not find market index selector, continuing with page evaluation');
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const indexData = await page.evaluate(() => {
+        const result = {
+          nepseIndex: 0,
+          indexChange: 0,
+          indexPercentageChange: 0,
+          totalTurnover: 0,
+          totalTradedShares: 0,
+          advanced: 0,
+          declined: 0,
+          unchanged: 0
+        };
+
+        const parseNumber = (text) => {
+          if (!text) return 0;
+          const num = parseFloat(text.replace(/,/g, '').replace(/[^\d.-]/g, ''));
+          return isNaN(num) ? 0 : num;
+        };
+
+        // Try multiple selectors to find the index value
+        const indexSelectors = [
+          'span[class*="index-value"]',
+          'span[class*="nepse-index"]',
+          'h1[class*="index"]',
+          '[class*="index-section"] h1',
+          '[class*="market-index"] h1',
+          'div[class*="index-main"]',
+          '[data-index-value]'
+        ];
+
+        let indexElement = null;
+        for (const selector of indexSelectors) {
+          indexElement = document.querySelector(selector);
+          if (indexElement) {
+            const text = indexElement.textContent || indexElement.innerText;
+            if (text && /\d{2,5}\.?\d*/.test(text)) {
+              result.nepseIndex = parseNumber(text);
+              break;
+            }
+          }
+        }
+
+        // If not found, search through all text content
+        if (result.nepseIndex === 0) {
+          const pageText = document.body.innerText;
+          const indexMatch = pageText.match(/NEPSE.*?Index[:\s]+([0-9,]+\.?[0-9]*)/i);
+          if (indexMatch) {
+            result.nepseIndex = parseNumber(indexMatch[1]);
+          } else {
+            // Alternative: look for large 4-5 digit numbers
+            const largeNumbers = pageText.match(/\b([2-9]\d{3,4}\.\d+)\b/g);
+            if (largeNumbers && largeNumbers.length > 0) {
+              result.nepseIndex = parseNumber(largeNumbers[0]);
+            }
+          }
+        }
+
+        // Find index change (e.g., -5.03)
+        const changeSelectors = [
+          'span[class*="change"]',
+          'span[class*="index-change"]',
+          '[class*="index-section"] span:nth-child(2)',
+          '[data-index-change]'
+        ];
+
+        for (const selector of changeSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            const text = element.textContent || element.innerText;
+            const changeMatch = text.match(/[-+]?\s*[0-9,]+\.?[0-9]*/);
+            if (changeMatch) {
+              result.indexChange = parseNumber(changeMatch[0]);
+              break;
+            }
+          }
+        }
+
+        // If not found via selector, search page text
+        if (result.indexChange === 0) {
+          const pageText = document.body.innerText;
+          // Look for pattern like "-5.03" near "NEPSE Index"
+          const changeMatch = pageText.match(/NEPSE.*?Index.*?([-+]?\s*[0-9,]+\.?[0-9]*)\s*[-+]/i);
+          if (changeMatch) {
+            result.indexChange = parseNumber(changeMatch[1]);
+          }
+        }
+
+        // Find percentage change (e.g., -0.19%)
+        const percentMatch = document.body.innerText.match(/([-+]?\s*[0-9,]+\.?[0-9]*)%/);
+        if (percentMatch) {
+          result.indexPercentageChange = parseNumber(percentMatch[1]);
+        }
+
+        // Find Total Turnover
+        const turnoverMatch = document.body.innerText.match(/Total Turnover\s*Rs[:\s]*\|?\s*([0-9,]+\.?[0-9]*)/i);
+        if (turnoverMatch) {
+          result.totalTurnover = parseNumber(turnoverMatch[1]);
+        }
+
+        // Find Total Traded Shares
+        const sharesMatch = document.body.innerText.match(/Total Traded Shares\s*\|?\s*([0-9,]+)/i);
+        if (sharesMatch) {
+          result.totalTradedShares = parseNumber(sharesMatch[1]);
+        }
+
+        // Find Advanced, Declined, Unchanged counts
+        const statsMatch = document.body.innerText.match(/Advanced\s*(\d+)[\s\S]*?Declined\s*(\d+)[\s\S]*?Unchanged\s*(\d+)/i);
+        if (statsMatch) {
+          result.advanced = parseInt(statsMatch[1], 10);
+          result.declined = parseInt(statsMatch[2], 10);
+          result.unchanged = parseInt(statsMatch[3], 10);
+        } else {
+          // Try alternative pattern
+          const altMatch = document.body.innerText.match(/Advanced\s*(\d+)/i);
+          const decMatch = document.body.innerText.match(/Declined\s*(\d+)/i);
+          const uncMatch = document.body.innerText.match(/Unchanged\s*(\d+)/i);
+
+          if (altMatch) result.advanced = parseInt(altMatch[1], 10);
+          if (decMatch) result.declined = parseInt(decMatch[1], 10);
+          if (uncMatch) result.unchanged = parseInt(uncMatch[1], 10);
+        }
+
+        return result;
+      });
+
+      await page.close();
+
+      console.log('✅ Market index data scraped successfully');
+      console.log(`📊 Index: ${indexData.nepseIndex}, Change: ${indexData.indexChange} (${indexData.indexPercentageChange}%)`);
+      console.log(`💱 Turnover: ${indexData.totalTurnover}, Traded Shares: ${indexData.totalTradedShares}`);
+      console.log(`📈 Advanced: ${indexData.advanced}, Declined: ${indexData.declined}, Unchanged: ${indexData.unchanged}`);
+
+      return indexData;
+    } catch (error) {
+      console.error('❌ Market index scraping failed:', error.message);
+      throw error;
+    }
+  }
 }
 
 // Export functions for backward compatibility
