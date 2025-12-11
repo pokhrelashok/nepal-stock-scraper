@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# NEPSE Portfolio API - Ubuntu Server Deployment Script
-# Usage: ./deploy-ubuntu.sh [domain_name]
-
 set -e  # Exit on any error
 
 DOMAIN=${1:-"localhost"}
@@ -28,96 +25,75 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Update system packages
 echo "📦 Updating system packages..."
 apt update && apt upgrade -y
 
-# Install required packages
 echo "📦 Installing required packages..."
 apt install -y curl wget git nginx sqlite3 certbot python3-certbot-nginx ufw jq
 
-# Install Chrome/Puppeteer dependencies
 echo "📦 Installing Chrome dependencies for Puppeteer..."
-apt install -y \
-    ca-certificates \
-    fonts-liberation \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libdrm2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libxss1 \
-    libgtk-3-0 \
-    libasound2-dev \
-    xdg-utils
+apt install -y ca-certificates fonts-liberation libatk-bridge2.0-0 libatk1.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libgtk-3-0 libasound2-dev xdg-utils
 
-# Install Node.js (NodeSource LTS)
-echo "📦 Installing Node.js (LTS) via NodeSource..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs build-essential
-
-# Verify installation
+echo "📦 Checking Node.js..."
+if command -v node >/dev/null 2>&1 && node -v | grep -q '^v20\.'; then
+    echo "✅ Node.js already present"
+else
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt install -y nodejs build-essential
+fi
 node --version
 npm --version
 
 # Install Google Chrome for Puppeteer
-echo "📦 Installing Google Chrome..."
+echo "📦 Checking Google Chrome..."
+if command -v google-chrome-stable >/dev/null 2>&1; then
+    echo "✅ Google Chrome already present"
+else
+    echo "📦 Installing Google Chrome..."
 
-# Check available disk space and memory
-echo "🔍 Checking system resources..."
-df -h /var/cache/apt/archives
-free -h
+    echo "🔍 Checking system resources..."
+    df -h /var/cache/apt/archives
+    free -h
 
-# Clean up package cache to free space
-apt clean
-apt autoremove -y
-
-# Download Chrome GPG key
-wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
-echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-apt update
-
-# Try installing Chrome with better error handling
-echo "📦 Attempting Chrome installation..."
-if ! apt install -y google-chrome-stable; then
-    echo "🔧 Chrome installation failed, trying alternative approaches..."
-    
-    # Clean up any partial installation
-    apt --fix-broken install -y
     apt clean
-    
-    # Try downloading and installing manually with more space
-    cd /tmp
-    wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    
-    # Install with dpkg and fix dependencies
-    if dpkg -i chrome.deb; then
-        echo "✅ Chrome installed successfully via dpkg"
-    else
-        echo "🔧 Fixing Chrome dependencies..."
+    apt autoremove -y
+
+    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    apt update
+
+    echo "📦 Attempting Chrome installation..."
+    if ! apt install -y google-chrome-stable; then
+        echo "🔧 Chrome installation failed, trying alternative approaches..."
         apt --fix-broken install -y
-        dpkg -i chrome.deb || apt install -f -y
-    fi
-    
-    # Clean up
-    rm -f chrome.deb
-    
-    # Verify installation
-    if which google-chrome-stable >/dev/null 2>&1; then
-        echo "✅ Chrome installation verified"
-    else
-        echo "❌ Chrome installation failed completely"
-        echo "⚠️ Will try to use Puppeteer's bundled Chromium instead"
-        # Remove the Chrome executable path requirement
-        export SKIP_CHROME_INSTALL=true
+        apt clean
+        cd /tmp
+        wget -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        if dpkg -i chrome.deb; then
+            echo "✅ Chrome installed successfully via dpkg"
+        else
+            echo "🔧 Fixing Chrome dependencies..."
+            apt --fix-broken install -y
+            dpkg -i chrome.deb || apt install -f -y
+        fi
+        rm -f chrome.deb
+        if which google-chrome-stable >/dev/null 2>&1; then
+            echo "✅ Chrome installation verified"
+        else
+            echo "❌ Chrome installation failed completely"
+            echo "⚠️ Will try to use Puppeteer's bundled Chromium instead"
+            export SKIP_CHROME_INSTALL=true
+        fi
     fi
 fi
 
 # Install PM2 globally
-echo "📦 Installing PM2..."
-npm install -g pm2
+echo "📦 Checking PM2..."
+if command -v pm2 >/dev/null 2>&1; then
+    echo "✅ PM2 already present"
+else
+    npm install -g pm2
+fi
 
 # Create application user
 echo "👤 Creating application user..."
@@ -141,38 +117,37 @@ else
     echo "✅ User $APP_USER already exists"
 fi
 
-# Create application directory
 echo "📁 Setting up application directory..."
 mkdir -p $APP_DIR
 chown $APP_USER:$APP_USER $APP_DIR
 
 # Copy application files
 echo "📋 Copying application files..."
-# Copy main application (excluding unnecessary directories and files)
 rsync -av --exclude='deploy/' --exclude='.git/' --exclude='node_modules/' --exclude='*.log' --exclude='.DS_Store' --exclude='*.db' . $APP_DIR/
 # Remove any existing symlink and copy ecosystem config directly
 rm -f $APP_DIR/ecosystem.config.js
 cp $DEPLOY_DIR/ecosystem.config.js $APP_DIR/
 
-# Update ecosystem config based on Chrome installation status
 if [ "$SKIP_CHROME_INSTALL" = "true" ]; then
     echo "🔧 Configuring for Puppeteer's bundled Chromium..."
-    # Remove Chrome executable path from ecosystem config
     sed -i '/PUPPETEER_EXECUTABLE_PATH/d' $APP_DIR/ecosystem.config.js
 fi
 
 chown -R $APP_USER:$APP_USER $APP_DIR
 
-# Switch to app user for Node.js operations
 echo "📦 Installing Node.js dependencies..."
 sudo -u $APP_USER bash << DEPS_EOF
 set -e
 cd "$APP_DIR"
-if [ -f package-lock.json ]; then
-    npm ci --omit=dev
+if [ -d node_modules ]; then
+    echo "Dependencies already installed, skipping"
 else
-    echo "ℹ️ package-lock.json not found, using npm install --omit=dev"
-    npm install --omit=dev
+    if [ -f package-lock.json ]; then
+        npm ci --omit=dev
+    else
+        echo "ℹ️ package-lock.json not found, using npm install --omit=dev"
+        npm install --omit=dev
+    fi
 fi
 mkdir -p logs public/images
 DEPS_EOF
@@ -182,7 +157,11 @@ echo "🗃️ Initializing database..."
 sudo -u $APP_USER bash << DB_EOF
 set -e
 cd "$APP_DIR"
-node src/database/database.js
+if [ -f "$APP_DIR/nepse.db" ]; then
+    echo "Database already exists, skipping"
+else
+    node src/database/database.js
+fi
 DB_EOF
 
 # Setup Nginx
@@ -236,7 +215,7 @@ sudo -u $APP_USER bash << PM2_START_EOF
 set -e
 cd "$APP_DIR"
 export PM2_HOME="/home/$APP_USER/.pm2"
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js || pm2 restart ecosystem.config.js
 pm2 save
 pm2 startup systemd -u $APP_USER --hp /home/$APP_USER
 PM2_START_EOF
