@@ -247,7 +247,9 @@ app.get('/api/market/status', async (req, res) => {
             totalTradedShares: indexData.totalTradedShares,
             advanced: indexData.advanced,
             declined: indexData.declined,
-            unchanged: indexData.unchanged
+            unchanged: indexData.unchanged,
+            statusDate: indexData.marketStatusDate,
+            statusTime: indexData.marketStatusTime
           },
           source: 'LIVE_SCRAPER',
           lastUpdated: new Date().toISOString()
@@ -278,7 +280,9 @@ app.get('/api/market/status', async (req, res) => {
           totalTradedShares: marketIndex.total_traded_shares,
           advanced: marketIndex.advanced,
           declined: marketIndex.declined,
-          unchanged: marketIndex.unchanged
+          unchanged: marketIndex.unchanged,
+          statusDate: marketIndex.market_status_date,
+          statusTime: marketIndex.market_status_time
         };
       }
 

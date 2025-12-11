@@ -336,6 +336,8 @@ function saveMarketIndex(indexData) {
       advanced,
       declined,
       unchanged,
+      marketStatusDate = null,
+      marketStatusTime = null,
       tradingDate = null
     } = indexData;
 
@@ -348,15 +350,15 @@ function saveMarketIndex(indexData) {
 
     const sql = `
       INSERT OR REPLACE INTO market_index (
-        trading_date, nepse_index, index_change, index_percentage_change,
+        trading_date, market_status_date, market_status_time, nepse_index, index_change, index_percentage_change,
         total_turnover, total_traded_shares, advanced, declined, unchanged,
         last_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
 
     db.run(
       sql,
-      [date, nepseIndex, indexChange, indexPercentageChange, totalTurnover, totalTradedShares, advanced, declined, unchanged],
+      [date, marketStatusDate, marketStatusTime, nepseIndex, indexChange, indexPercentageChange, totalTurnover, totalTradedShares, advanced, declined, unchanged],
       function (err) {
         if (err) {
           console.error('Error saving market index:', err);
@@ -389,6 +391,8 @@ function getMarketIndexData(tradingDate = null) {
         advanced,
         declined,
         unchanged,
+        market_status_date,
+        market_status_time,
         trading_date,
         last_updated
       FROM market_index 
@@ -420,6 +424,8 @@ function getMarketIndexHistory(days = 7) {
         advanced,
         declined,
         unchanged,
+        market_status_date,
+        market_status_time,
         trading_date,
         last_updated
       FROM market_index 

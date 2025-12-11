@@ -154,6 +154,19 @@ echo "👤 Creating application user..."
 if ! id "$APP_USER" &>/dev/null; then
     useradd -m -s /bin/bash $APP_USER
     echo "✅ Created user: $APP_USER"
+    # Set password: use APP_USER_PASSWORD if provided, otherwise generate a secure random password
+    if [ -n "$APP_USER_PASSWORD" ]; then
+        echo "$APP_USER:$APP_USER_PASSWORD" | chpasswd
+        echo "🔑 Password set from APP_USER_PASSWORD environment variable"
+    else
+        GENERATED_PW=$(openssl rand -base64 18)
+        echo "$APP_USER:$GENERATED_PW" | chpasswd
+        CRED_FILE="/root/${APP_USER}_credentials.txt"
+        echo "username: $APP_USER" > "$CRED_FILE"
+        echo "password: $GENERATED_PW" >> "$CRED_FILE"
+        chmod 600 "$CRED_FILE"
+        echo "🔑 Generated password saved to $CRED_FILE (permission 600)"
+    fi
 else
     echo "✅ User $APP_USER already exists"
 fi

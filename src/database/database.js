@@ -73,9 +73,19 @@ function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_company_details_symbol ON company_details(symbol);
 
+    CREATE TABLE IF NOT EXISTS market_status (
+        id INTEGER PRIMARY KEY,
+        is_open BOOLEAN DEFAULT 0,
+        trading_date TEXT,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_market_status_date ON market_status(trading_date);
+
     CREATE TABLE IF NOT EXISTS market_index (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         trading_date TEXT NOT NULL,
+        market_status_date TEXT,
+        market_status_time TEXT,
         nepse_index REAL,
         index_change REAL,
         index_percentage_change REAL,

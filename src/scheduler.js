@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
-const { insertTodayPrices, updateMarketStatus, saveMarketIndex } = require('./database/queries');
+const { insertTodayPrices, updateMarketStatus, saveMarketIndex, getSecurityIdsWithoutDetails, insertCompanyDetails } = require('./database/queries');
 const { formatPricesForDatabase } = require('./utils/formatter');
 
 class Scheduler {
@@ -34,14 +34,24 @@ class Scheduler {
       timezone: 'Asia/Kathmandu'
     });
 
+    // Company details update at 11:03 AM on market days (Sun-Thu = 0,1,2,3,4)
+    const companyDetailsJob = cron.schedule('3 11 * * 0-4', async () => {
+      await this.updateCompanyDetails();
+    }, {
+      scheduled: false,
+      timezone: 'Asia/Kathmandu'
+    });
+
     this.jobs.set('priceUpdate', priceJob);
     this.jobs.set('closeUpdate', closeJob);
+    this.jobs.set('companyDetailsUpdate', companyDetailsJob);
 
     priceJob.start();
     closeJob.start();
+    companyDetailsJob.start();
 
     this.isRunning = true;
-    console.log('📅 Price update schedule started (every 2 min during hours + close update)');
+    console.log('📅 Price update schedule started (every 2 min during hours + close update + company details at 11:03)');
   }
 
   async updatePricesAndStatus(phase) {
@@ -81,7 +91,35 @@ class Scheduler {
     } catch (error) {
       console.error('❌ Scheduled update failed:', error.message);
     }
-  } async stopPriceUpdateSchedule() {
+  }
+
+  async updateCompanyDetails() {
+    console.log('🏢 Scheduled company details update started...');
+
+    try {
+      // Get security IDs that don't have company details yet
+      const missingCompanies = await getSecurityIdsWithoutDetails();
+
+      if (!missingCompanies || missingCompanies.length === 0) {
+        console.log('✅ All companies already have details');
+        return;
+      }
+
+      console.log(`📊 Found ${missingCompanies.length} companies missing details, scraping...`);
+
+      // Scrape details only for companies without them
+      const details = await this.scraper.scrapeAllCompanyDetails(
+        missingCompanies,
+        insertCompanyDetails
+      );
+
+      console.log(`✅ Scraped and saved details for ${details.length} companies`);
+    } catch (error) {
+      console.error('❌ Company details update failed:', error.message);
+    }
+  }
+
+  async stopPriceUpdateSchedule() {
     const job = this.jobs.get('priceUpdate');
     if (job) {
       job.stop();

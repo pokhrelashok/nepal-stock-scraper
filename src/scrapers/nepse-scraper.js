@@ -680,7 +680,9 @@ class NepseScraper {
           totalTradedShares: 0,
           advanced: 0,
           declined: 0,
-          unchanged: 0
+          unchanged: 0,
+          marketStatusDate: null,
+          marketStatusTime: null
         };
 
         const parseNumber = (text) => {
@@ -688,6 +690,14 @@ class NepseScraper {
           const num = parseFloat(text.replace(/,/g, '').replace(/[^\d.-]/g, ''));
           return isNaN(num) ? 0 : num;
         };
+
+        // Extract date and time (e.g., "Dec 10 | 3:00 PM")
+        const pageText = document.body.innerText;
+        const dateTimeMatch = pageText.match(/([A-Za-z]+\s+\d{1,2})\s*\|\s*(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/i);
+        if (dateTimeMatch) {
+          result.marketStatusDate = dateTimeMatch[1].trim();
+          result.marketStatusTime = dateTimeMatch[2].trim();
+        }
 
         // Try multiple selectors to find the index value
         const indexSelectors = [
