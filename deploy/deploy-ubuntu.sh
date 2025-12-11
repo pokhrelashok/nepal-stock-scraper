@@ -12,6 +12,11 @@ DEPLOY_DIR="$(dirname "$(realpath "$0")")"
 NGINX_AVAILABLE="/etc/nginx/sites-available/nepse-api"
 NGINX_ENABLED="/etc/nginx/sites-enabled/nepse-api"
 
+# Detect public IPv4 (best-effort)
+SERVER_IP=$(curl -4 -s https://ifconfig.co || curl -4 -s https://api.ipify.org || dig +short myip.opendns.com @resolver1.opendns.com || hostname -I | awk '{print $1}')
+SERVER_IP=${SERVER_IP:-127.0.0.1}
+echo "🌐 Detected server IPv4: $SERVER_IP"
+
 echo "🚀 Starting NEPSE Portfolio API deployment on Ubuntu..."
 echo "📍 Domain: $DOMAIN"
 echo "👤 App User: $APP_USER"
@@ -222,6 +227,7 @@ cp $DEPLOY_DIR/templates/nginx-site.conf $NGINX_AVAILABLE
 # Replace placeholders in the nginx configuration
 sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" $NGINX_AVAILABLE
 sed -i "s|APP_DIR_PLACEHOLDER|$APP_DIR|g" $NGINX_AVAILABLE
+sed -i "s/IPV4_PLACEHOLDER/$SERVER_IP/g" $NGINX_AVAILABLE
 
 # Enable Nginx site
 ln -sf $NGINX_AVAILABLE $NGINX_ENABLED
