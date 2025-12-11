@@ -1,26 +1,18 @@
 #!/bin/bash
+set -e
 
-# NEPSE API Update Script
 cd APP_DIR_PLACEHOLDER
-
 echo "🔄 Updating NEPSE API..."
 
-# Source NVM
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-nvm use default
-
-# Pull latest code
 echo "📥 Pulling latest code..."
 git pull origin main
 
-# Install/update dependencies
 echo "📦 Installing dependencies..."
-npm ci --production
+npm ci --omit=dev
 
-# Reload PM2 processes
 echo "🔄 Reloading application..."
-pm2 reload ecosystem.config.js
+export PM2_HOME="/home/$USER/.pm2"
+pm2 reload ecosystem.config.js || pm2 restart ecosystem.config.js
 
 echo "✅ Application updated successfully!"
 echo "📊 Current status:"
