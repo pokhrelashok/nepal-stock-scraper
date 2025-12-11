@@ -24,19 +24,40 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize scheduler
 const scheduler = new Scheduler();
+let isShuttingDown = false;
 
 // Graceful shutdown handling
-const cleanup = async () => {
-  console.log('\n🧹 Shutting down server...');
-  if (scheduler) {
-    await scheduler.stopAllSchedules();
+const cleanup = async (signal) => {
+  if (isShuttingDown) {
+    console.log('⚠️ Shutdown already in progress...');
+    return;
   }
-  console.log('✅ Server shutdown completed');
+  isShuttingDown = true;
+
+  console.log(`\n🧹 Received ${signal}, shutting down server...`);
+
+  try {
+    if (scheduler) {
+      await scheduler.stopAllSchedules();
+    }
+    console.log('✅ Server shutdown completed');
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error.message);
+  }
+
   process.exit(0);
 };
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+process.on('SIGINT', () => cleanup('SIGINT'));
+process.on('SIGTERM', () => cleanup('SIGTERM'));
+process.on('uncaughtException', async (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  await cleanup('uncaughtException');
+});
+process.on('unhandledRejection', async (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  await cleanup('unhandledRejection');
+});
 
 // Middleware
 app.use(cors());
@@ -103,11 +124,8 @@ app.post('/api/scheduler/stop', async (req, res) => {
 
 app.get('/api/scheduler/status', (req, res) => {
   try {
-    const status = {
-      running: scheduler.isSchedulerRunning(),
-      activeJobs: scheduler.getActiveJobs()
-    };
-    res.json(formatResponse(status));
+    const health = scheduler.getHealth();
+    res.json(formatResponse(health));
   } catch (error) {
     console.error('Failed to get scheduler status:', error);
     res.status(500).json(formatError('Failed to get scheduler status'));
@@ -411,8 +429,16 @@ app.get('/api', (req, res) => {
   }));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`API running at http://localhost:${PORT}`);
+
+  // Auto-start the scheduler
+  try {
+    await scheduler.startPriceUpdateSchedule();
+    console.log('✅ Scheduler auto-started on server boot');
+  } catch (error) {
+    console.error('❌ Failed to auto-start scheduler:', error.message);
+  }
 });
 
 module.exports = app;

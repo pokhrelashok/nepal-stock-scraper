@@ -8,6 +8,22 @@ class Scheduler {
     this.jobs = new Map();
     this.scraper = new NepseScraper();
     this.isRunning = false;
+    this.isJobRunning = new Map(); // Track if a specific job is currently executing
+    this.stats = {
+      priceUpdate: { lastRun: null, lastSuccess: null, successCount: 0, failCount: 0 },
+      closeUpdate: { lastRun: null, lastSuccess: null, successCount: 0, failCount: 0 },
+      companyDetailsUpdate: { lastRun: null, lastSuccess: null, successCount: 0, failCount: 0 }
+    };
+  }
+
+  // Get scheduler health/stats
+  getHealth() {
+    return {
+      isRunning: this.isRunning,
+      activeJobs: this.getActiveJobs(),
+      currentlyExecuting: Array.from(this.isJobRunning.entries()).filter(([, v]) => v).map(([k]) => k),
+      stats: this.stats
+    };
   }
 
   async startPriceUpdateSchedule() {
@@ -55,6 +71,17 @@ class Scheduler {
   }
 
   async updatePricesAndStatus(phase) {
+    const jobKey = phase === 'AFTER_CLOSE' ? 'closeUpdate' : 'priceUpdate';
+
+    // Prevent overlapping runs
+    if (this.isJobRunning.get(jobKey)) {
+      console.log(`⚠️ ${jobKey} is already running, skipping...`);
+      return;
+    }
+
+    this.isJobRunning.set(jobKey, true);
+    this.stats[jobKey].lastRun = new Date().toISOString();
+
     console.log(`🕐 Scheduled ${phase === 'AFTER_CLOSE' ? 'close' : 'price'} update started...`);
 
     try {
@@ -88,12 +115,29 @@ class Scheduler {
       } else {
         console.log('🔒 Market is closed, skipping price update');
       }
+
+      this.stats[jobKey].lastSuccess = new Date().toISOString();
+      this.stats[jobKey].successCount++;
     } catch (error) {
       console.error('❌ Scheduled update failed:', error.message);
+      this.stats[jobKey].failCount++;
+    } finally {
+      this.isJobRunning.set(jobKey, false);
     }
   }
 
   async updateCompanyDetails() {
+    const jobKey = 'companyDetailsUpdate';
+
+    // Prevent overlapping runs
+    if (this.isJobRunning.get(jobKey)) {
+      console.log(`⚠️ ${jobKey} is already running, skipping...`);
+      return;
+    }
+
+    this.isJobRunning.set(jobKey, true);
+    this.stats[jobKey].lastRun = new Date().toISOString();
+
     console.log('🏢 Scheduled company details update started...');
 
     try {
@@ -114,8 +158,14 @@ class Scheduler {
       );
 
       console.log(`✅ Scraped and saved details for ${details.length} companies`);
+
+      this.stats[jobKey].lastSuccess = new Date().toISOString();
+      this.stats[jobKey].successCount++;
     } catch (error) {
       console.error('❌ Company details update failed:', error.message);
+      this.stats[jobKey].failCount++;
+    } finally {
+      this.isJobRunning.set(jobKey, false);
     }
   }
 
