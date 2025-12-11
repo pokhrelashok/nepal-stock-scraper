@@ -43,10 +43,15 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Hello route
+// Home page route - serve HTML
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+// API info route
+app.get('/api', (req, res) => {
   res.json({
-    message: 'Hello! Welcome to NEPSE Portfolio API',
+    message: 'Welcome to NEPSE Portfolio API',
     version: '2.1.0',
     endpoints: {
       market: '/api/market/status',
