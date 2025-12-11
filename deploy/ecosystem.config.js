@@ -22,31 +22,16 @@ module.exports = {
       log_file: './logs/api-combined.log',
       time: true,
       watch: false,
-      max_memory_restart: '1G',
+      max_memory_restart: '512M',
       restart_delay: 4000,
       max_restarts: 10,
-      min_uptime: '10s'
-    },
-    {
-      name: 'nepse-scheduler',
-      script: 'src/scheduler.js',
-      instances: 1,
-      exec_mode: 'fork',
-      env: {
-        NODE_ENV: 'production',
-        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
-        PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
-      },
-      error_file: './logs/scheduler-err.log',
-      out_file: './logs/scheduler-out.log',
-      log_file: './logs/scheduler-combined.log',
-      time: true,
-      watch: false,
-      max_memory_restart: '500M',
-      restart_delay: 4000,
-      cron_restart: '0 0 * * *', // Restart daily at midnight
-      max_restarts: 5,
-      min_uptime: '30s'
+      min_uptime: '10s',
+      kill_timeout: 5000,
+      exp_backoff_restart_delay: 100,
+      // Limit memory usage
+      node_args: '--max-old-space-size=384'
     }
+    // Note: Scheduler is now integrated into the server and auto-starts on boot
+    // No separate scheduler process needed
   ]
 };

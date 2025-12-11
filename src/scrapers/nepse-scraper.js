@@ -96,9 +96,10 @@ class NepseScraper {
     console.log('⚡ Initializing browser for market status check...');
     await this.init();
 
+    let page = null;
     try {
       console.log('📄 Creating new page for market status...');
-      const page = await this.browser.newPage();
+      page = await this.browser.newPage();
       console.log('🔧 Setting user agent...');
       await page.setUserAgent(this.userAgent);
 
@@ -122,16 +123,20 @@ class NepseScraper {
         console.log('⏰ Using time-based market status fallback...');
         const now = DateTime.now().setZone('Asia/Kathmandu');
         const currentTime = now.hour * 100 + now.minute;
-        return currentTime >= 1000 && currentTime <= 1500 && [1, 2, 3, 4, 5].includes(now.weekday);
+        return currentTime >= 1000 && currentTime <= 1500 && [0, 1, 2, 3, 4].includes(now.weekday);
       } catch (timeoutErr) {
         console.warn('⚠️ Failed to detect market status from page, using time-based fallback');
         const now = DateTime.now().setZone('Asia/Kathmandu');
         const currentTime = now.hour * 100 + now.minute;
-        return currentTime >= 1000 && currentTime <= 1500 && [1, 2, 3, 4, 5].includes(now.weekday);
+        return currentTime >= 1000 && currentTime <= 1500 && [0, 1, 2, 3, 4].includes(now.weekday);
       }
     } catch (error) {
       console.error('❌ Market status check failed:', error.message);
       throw error;
+    } finally {
+      if (page) {
+        await page.close().catch(() => { });
+      }
     }
   }
 
@@ -141,10 +146,12 @@ class NepseScraper {
     await this.init();
 
     let lastError;
+    let page = null;
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔄 Attempt ${attempt}/${maxRetries} - Creating new page...`);
-        const page = await this.browser.newPage();
+        page = await this.browser.newPage();
         console.log('🔧 Setting user agent and timeouts...');
         await page.setUserAgent(this.userAgent);
 
@@ -154,22 +161,34 @@ class NepseScraper {
 
         console.log('🎯 Trying CSV download method first...');
         try {
-          return await this.scrapeTodayPricesCSVDownload(page);
+          const result = await this.scrapeTodayPricesCSVDownload(page);
+          await page.close().catch(() => { });
+          return result;
         } catch (csvError) {
           console.log(`⚠️ CSV download method failed (attempt ${attempt}): ${csvError.message}`);
           console.log('🔄 Falling back to API capture...');
 
           try {
-            return await this.scrapeTodayPricesAPI(page);
+            const result = await this.scrapeTodayPricesAPI(page);
+            await page.close().catch(() => { });
+            return result;
           } catch (apiError) {
             console.log(`⚠️ API capture failed (attempt ${attempt}): ${apiError.message}`);
             console.log('🔄 Falling back to HTML scraping...');
-            return await this.scrapeTodayPricesHTML(page);
+            const result = await this.scrapeTodayPricesHTML(page);
+            await page.close().catch(() => { });
+            return result;
           }
         }
       } catch (error) {
         lastError = error;
         console.error(`❌ Attempt ${attempt} failed: ${error.message}`);
+
+        // Close page on error
+        if (page) {
+          await page.close().catch(() => { });
+          page = null;
+        }
 
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
@@ -181,7 +200,9 @@ class NepseScraper {
 
     console.error('❌ All scraping attempts failed');
     throw lastError;
-  } async scrapeTodayPricesCSVDownload(page) {
+  }
+
+  async scrapeTodayPricesCSVDownload(page) {
     console.log('📥 Using CSV download method...');
 
     let interceptedData = null;
@@ -462,9 +483,10 @@ class NepseScraper {
     await this.init();
     const details = [];
     let currentBatch = [];
+    let page = null;
 
     try {
-      const page = await this.browser.newPage();
+      page = await this.browser.newPage();
       await page.setUserAgent(this.userAgent);
 
       let count = 0;
@@ -644,8 +666,17 @@ class NepseScraper {
           console.log(`📊 Progress: ${count}/${securityIds.length}`);
         }
       }
+
+      // Close page after scraping all companies
+      if (page) {
+        await page.close().catch(() => { });
+      }
     } catch (e) {
       console.error('❌ Error in company details scraping:', e);
+      // Close page on error
+      if (page) {
+        await page.close().catch(() => { });
+      }
     }
 
     return details;
@@ -737,8 +768,9 @@ class NepseScraper {
     console.log('⚡ Initializing browser for market index scrape...');
     await this.init();
 
+    let page = null;
     try {
-      const page = await this.browser.newPage();
+      page = await this.browser.newPage();
       await page.setUserAgent(this.userAgent);
 
       // Disable cache to ensure fresh data
@@ -949,6 +981,9 @@ class NepseScraper {
       return indexData;
     } catch (error) {
       console.error('❌ Market index scraping failed:', error.message);
+      if (page) {
+        await page.close().catch(() => { });
+      }
       throw error;
     }
   }
