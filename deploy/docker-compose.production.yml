@@ -1,26 +1,71 @@
 version: "3.8"
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: nepse-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-nepse_root_password}
+      MYSQL_DATABASE: nepse_db
+      MYSQL_USER: nepse
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-nepse_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${MYSQL_ROOT_PASSWORD:-nepse_root_password}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nepse-api:
     build:
-      context: .
-      dockerfile: Dockerfile.production
+      context: ..
+      dockerfile: deploy/Dockerfile.production
+    container_name: nepse-api
     ports:
       - "3000:3000"
     volumes:
-      - ./nepse.db:/app/nepse.db
-      - ./public/images:/app/public/images
-      - ./logs:/app/logs
+      - ../public/images:/app/public/images
+      - ../logs:/app/logs
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=nepse
+      - DB_PASSWORD=${MYSQL_PASSWORD:-nepse_password}
+      - DB_NAME=nepse_db
+      - DB_POOL_SIZE=10
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
@@ -29,13 +74,14 @@ services:
 
   nginx:
     image: nginx:alpine
+    container_name: nepse-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/sites:/etc/nginx/conf.d
-      - ./public/images:/var/www/images
+      - ../public/images:/var/www/images
       - ./ssl:/etc/nginx/ssl
     depends_on:
       - nepse-api
@@ -45,3 +91,7 @@ services:
       options:
         max-size: "5m"
         max-file: "3"
+
+volumes:
+  mysql_data:
+    driver: local

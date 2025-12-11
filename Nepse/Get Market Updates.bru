@@ -1,0 +1,21 @@
+meta {
+  name: Get Market Updates
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/updates
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "symbols": ["NABIL"]
+  }
+}
+
+settings {
+  encodeUrl: true
+}

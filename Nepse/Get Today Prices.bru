@@ -1,0 +1,17 @@
+meta {
+  name: Get Today Prices
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/today-prices?limit=100&sortBy=symbol&order=asc
+  body: none
+  auth: inherit
+}
+
+params:query {
+  limit: 100
+  sortBy: symbol
+  order: asc
+}

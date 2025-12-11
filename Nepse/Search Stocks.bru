@@ -1,0 +1,15 @@
+meta {
+  name: Search Stocks
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=NABIL
+  body: none
+  auth: inherit
+}
+
+params:query {
+  q: NABIL
+}

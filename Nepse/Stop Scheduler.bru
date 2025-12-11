@@ -1,0 +1,11 @@
+meta {
+  name: Stop Scheduler
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/scheduler/stop
+  body: none
+  auth: inherit
+}

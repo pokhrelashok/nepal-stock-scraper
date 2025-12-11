@@ -18,6 +18,7 @@ sudo deploy/deploy-ubuntu.sh localhost
 
 - Node.js 18.x + PM2
 - Nginx with security config
+- MySQL 8.0 database
 - SSL certificate (Let's Encrypt)
 - Firewall setup (UFW)
 
@@ -25,6 +26,7 @@ sudo deploy/deploy-ubuntu.sh localhost
 
 - Application user (`nepse`)
 - Directory structure (`/var/www/nepse-api/`)
+- MySQL database and credentials
 - Systemd services for auto-restart
 - Log rotation and monitoring
 
@@ -112,6 +114,13 @@ sudo systemctl restart nginx
 **Database issues?**
 
 ```bash
+# Check MySQL status
+sudo systemctl status mysql
+
+# Test database connection
+mysql -u nepse -p nepse_db -e "SELECT COUNT(*) FROM stock_prices;"
+
+# Reinitialize schema
 sudo -u nepse node /var/www/nepse-api/src/database/database.js
 ```
 

@@ -37,7 +37,7 @@ This script will automatically:
 - **Node.js 18.x** - JavaScript runtime
 - **PM2** - Process manager for Node.js apps
 - **Nginx** - Web server and reverse proxy
-- **SQLite3** - Database engine
+- **MySQL 8.0** - Database engine
 - **UFW** - Firewall
 - **Certbot** - SSL certificate management
 
@@ -48,7 +48,7 @@ This script will automatically:
 ├── src/                     # Source code
 ├── public/images/           # Company logos
 ├── logs/                    # Application logs
-├── nepse.db                 # SQLite database
+├── .env                     # Database credentials (auto-generated)
 ├── ecosystem.config.js      # PM2 configuration
 ├── update.sh               # Update script
 └── populate-data.sh        # Data population script
@@ -157,13 +157,16 @@ sudo -u nepse /var/www/nepse-api/populate-data.sh
 
 ```bash
 # Create backup
-sudo -u nepse cp /var/www/nepse-api/nepse.db /var/www/nepse-api/nepse.db.backup.$(date +%Y%m%d_%H%M%S)
+mysqldump -u nepse -p nepse_db > /var/www/nepse-api/backup_$(date +%Y%m%d_%H%M%S).sql
 
-# Check database size
-sudo -u nepse sqlite3 /var/www/nepse-api/nepse.db "SELECT COUNT(*) FROM stock_prices;"
+# Check database stats
+mysql -u nepse -p nepse_db -e "SELECT COUNT(*) FROM stock_prices;"
 
 # Database shell access
-sudo -u nepse sqlite3 /var/www/nepse-api/nepse.db
+mysql -u nepse -p nepse_db
+
+# Restore from backup
+mysql -u nepse -p nepse_db < backup.sql
 ```
 
 ### System Management
@@ -267,10 +270,13 @@ docker-compose -f docker-compose.production.yml logs -f
 2. **Database errors**
 
    ```bash
-   # Check database file permissions
-   ls -la /var/www/nepse-api/nepse.db
+   # Check MySQL service status
+   sudo systemctl status mysql
    
-   # Reinitialize if corrupted
+   # Test database connection
+   mysql -u nepse -p nepse_db -e "SELECT 1;"
+   
+   # Reinitialize schema if needed
    sudo -u nepse node /var/www/nepse-api/src/database/database.js
    ```
 

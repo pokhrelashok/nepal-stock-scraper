@@ -1,0 +1,11 @@
+meta {
+  name: Get Market Summary
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/market/summary
+  body: none
+  auth: inherit
+}

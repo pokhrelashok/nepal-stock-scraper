@@ -1,0 +1,11 @@
+meta {
+  name: Get Top Companies
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/companies/top/20
+  body: none
+  auth: inherit
+}

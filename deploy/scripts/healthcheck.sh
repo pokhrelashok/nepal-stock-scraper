@@ -5,7 +5,16 @@
 
 API_URL="http://localhost:3000"
 MAX_RESPONSE_TIME=10
-DB_PATH="/var/www/nepse-api/nepse.db"
+
+# Load environment variables
+if [ -f "/var/www/nepse-api/.env" ]; then
+    source /var/www/nepse-api/.env
+fi
+
+DB_HOST=${DB_HOST:-localhost}
+DB_USER=${DB_USER:-nepse}
+DB_PASSWORD=${DB_PASSWORD:-nepse_password}
+DB_NAME=${DB_NAME:-nepse_db}
 
 # Function to check if API responds within timeout
 check_api() {
@@ -20,16 +29,11 @@ check_api() {
 
 # Function to check if database is accessible
 check_database() {
-    if [ -f "$DB_PATH" ]; then
-        local count=$(sqlite3 $DB_PATH "SELECT COUNT(*) FROM stock_prices LIMIT 1;" 2>/dev/null)
-        if [ $? -eq 0 ]; then
-            return 0
-        else
-            echo "Database query failed"
-            return 1
-        fi
+    local count=$(mysql -u $DB_USER -p$DB_PASSWORD -h $DB_HOST $DB_NAME -N -e "SELECT COUNT(*) FROM stock_prices LIMIT 1;" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$count" ]; then
+        return 0
     else
-        echo "Database file not found"
+        echo "Database connection failed"
         return 1
     fi
 }

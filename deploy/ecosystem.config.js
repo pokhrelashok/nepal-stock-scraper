@@ -8,12 +8,24 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
+        DB_HOST: process.env.DB_HOST || 'localhost',
+        DB_PORT: process.env.DB_PORT || 3306,
+        DB_USER: process.env.DB_USER || 'nepse',
+        DB_PASSWORD: process.env.DB_PASSWORD || 'nepse_password',
+        DB_NAME: process.env.DB_NAME || 'nepse_db',
+        DB_POOL_SIZE: process.env.DB_POOL_SIZE || 10,
         PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
         PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
       },
       env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
+        DB_HOST: process.env.DB_HOST || 'localhost',
+        DB_PORT: process.env.DB_PORT || 3306,
+        DB_USER: process.env.DB_USER || 'nepse',
+        DB_PASSWORD: process.env.DB_PASSWORD || 'nepse_password',
+        DB_NAME: process.env.DB_NAME || 'nepse_db',
+        DB_POOL_SIZE: process.env.DB_POOL_SIZE || 10,
         PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false',
         PUPPETEER_EXECUTABLE_PATH: '/usr/bin/google-chrome-stable'
       },

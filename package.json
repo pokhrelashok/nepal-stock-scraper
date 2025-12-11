@@ -16,7 +16,7 @@
     "test": "npm run test:scraper && npm run test:api",
     "test:scraper": "node tests/scraper.test.js",
     "test:api": "node tests/api.test.js",
-    "clean": "rm -rf logs/*.log public/images/* nepse.db",
+    "clean": "rm -rf logs/*.log public/images/*",
     "lint": "echo 'Linting not configured'",
     "deploy:ubuntu": "sudo deploy/deploy-ubuntu.sh",
     "deploy:docker": "docker-compose -f deploy/docker-compose.production.yml up -d",
@@ -31,8 +31,8 @@
     "update:companies": "node src/index.js companies --missing --save",
     "update:all": "npm run update:prices && npm run update:companies",
     "populate:initial": "./populate-data.sh",
-    "backup:db": "cp nepse.db nepse.db.backup.$(date +%Y%m%d_%H%M%S)",
-    "restore:db": "echo 'Usage: cp nepse.db.backup.YYYYMMDD_HHMMSS nepse.db'"
+    "backup:db": "echo 'Use mysqldump -u nepse -p nepse_db > backup.sql'",
+    "restore:db": "echo 'Use mysql -u nepse -p nepse_db < backup.sql'"
   },
   "keywords": [
     "nepse",
@@ -51,10 +51,10 @@
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "luxon": "^3.7.2",
+    "mysql2": "^3.11.4",
     "node-cron": "^4.2.1",
     "puppeteer": "^24.32.1",
-    "sharp": "^0.34.5",
-    "sqlite3": "^5.1.7"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"

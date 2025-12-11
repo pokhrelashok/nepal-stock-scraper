@@ -19,7 +19,6 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy source code
 COPY src/ src/
 COPY public/ public/
-COPY .env.production .env
 
 # Create necessary directories
 RUN mkdir -p logs public/images && \

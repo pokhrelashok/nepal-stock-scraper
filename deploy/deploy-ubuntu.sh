@@ -34,7 +34,7 @@ echo "📦 Updating system packages..."
 apt update && apt upgrade -y
 
 echo "📦 Installing required packages..."
-apt install -y curl wget git nginx sqlite3 certbot python3-certbot-nginx ufw jq
+apt install -y curl wget git nginx mysql-server certbot python3-certbot-nginx ufw jq
 
 echo "📦 Installing Chrome dependencies for Puppeteer..."
 apt install -y ca-certificates fonts-liberation libatk-bridge2.0-0 libatk1.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libgtk-3-0 libasound2-dev xdg-utils
@@ -157,17 +157,64 @@ fi
 mkdir -p logs public/storage/images/logos
 DEPS_EOF
 
-# Initialize database
-echo "🗃️ Initializing database..."
-sudo -u $APP_USER bash << DB_EOF
+# Setup MySQL Database
+echo "🗃️ Setting up MySQL database..."
+
+# Generate secure MySQL password if not provided
+if [ -z "$MYSQL_NEPSE_PASSWORD" ]; then
+    MYSQL_NEPSE_PASSWORD=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    echo "🔑 Generated MySQL password for nepse user"
+fi
+
+# Start MySQL service
+systemctl start mysql
+systemctl enable mysql
+
+# Create database and user
+mysql -u root << MYSQL_SETUP
+CREATE DATABASE IF NOT EXISTS nepse_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'nepse'@'localhost' IDENTIFIED BY '${MYSQL_NEPSE_PASSWORD}';
+GRANT ALL PRIVILEGES ON nepse_db.* TO 'nepse'@'localhost';
+FLUSH PRIVILEGES;
+MYSQL_SETUP
+
+echo "✅ MySQL database 'nepse_db' created"
+
+# Create .env file with database credentials
+cat > $APP_DIR/.env << ENV_EOF
+NODE_ENV=production
+PORT=3000
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=nepse
+DB_PASSWORD=${MYSQL_NEPSE_PASSWORD}
+DB_NAME=nepse_db
+DB_POOL_SIZE=10
+ENV_EOF
+chown $APP_USER:$APP_USER $APP_DIR/.env
+chmod 600 $APP_DIR/.env
+
+# Save MySQL credentials securely
+MYSQL_CRED_FILE="/root/nepse_mysql_credentials.txt"
+echo "MySQL Database Credentials" > "$MYSQL_CRED_FILE"
+echo "=========================" >> "$MYSQL_CRED_FILE"
+echo "Database: nepse_db" >> "$MYSQL_CRED_FILE"
+echo "Username: nepse" >> "$MYSQL_CRED_FILE"
+echo "Password: ${MYSQL_NEPSE_PASSWORD}" >> "$MYSQL_CRED_FILE"
+echo "Host: localhost" >> "$MYSQL_CRED_FILE"
+echo "Port: 3306" >> "$MYSQL_CRED_FILE"
+chmod 600 "$MYSQL_CRED_FILE"
+echo "🔑 MySQL credentials saved to $MYSQL_CRED_FILE"
+
+# Initialize database schema
+echo "📊 Initializing database schema..."
+sudo -u $APP_USER bash << DB_INIT_EOF
 set -e
 cd "$APP_DIR"
-if [ -f "$APP_DIR/nepse.db" ]; then
-    echo "Database already exists, skipping"
-else
-    node src/database/database.js
-fi
-DB_EOF
+source .env
+node -e "require('./src/database/database.js'); setTimeout(() => process.exit(0), 3000);"
+DB_INIT_EOF
+echo "✅ Database schema initialized"
 
 # Setup Nginx
 echo "🔧 Configuring Nginx..."

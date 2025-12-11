@@ -3,17 +3,17 @@
 # NEPSE API Initial Data Population Script
 cd APP_DIR_PLACEHOLDER
 
-# Source NVM
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-nvm use default
+# Load environment variables
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
 
 echo "📊 Starting initial data population..."
 echo "⏱️ This may take several minutes depending on the number of companies"
 
-# Check if database has data
-STOCK_COUNT=$(sqlite3 nepse.db "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
-COMPANY_COUNT=$(sqlite3 nepse.db "SELECT COUNT(*) FROM company_details;" 2>/dev/null || echo "0")
+# Check if database has data using MySQL
+STOCK_COUNT=$(mysql -u $DB_USER -p$DB_PASSWORD -h $DB_HOST $DB_NAME -N -e "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
+COMPANY_COUNT=$(mysql -u $DB_USER -p$DB_PASSWORD -h $DB_HOST $DB_NAME -N -e "SELECT COUNT(*) FROM company_details;" 2>/dev/null || echo "0")
 
 echo "📈 Current data: $STOCK_COUNT price records, $COMPANY_COUNT company details"
 
@@ -38,8 +38,8 @@ else
 fi
 
 # Show final stats
-NEW_STOCK_COUNT=$(sqlite3 nepse.db "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
-NEW_COMPANY_COUNT=$(sqlite3 nepse.db "SELECT COUNT(*) FROM company_details;" 2>/dev/null || echo "0")
+NEW_STOCK_COUNT=$(mysql -u $DB_USER -p$DB_PASSWORD -h $DB_HOST $DB_NAME -N -e "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
+NEW_COMPANY_COUNT=$(mysql -u $DB_USER -p$DB_PASSWORD -h $DB_HOST $DB_NAME -N -e "SELECT COUNT(*) FROM company_details;" 2>/dev/null || echo "0")
 
 echo "📊 Final data: $NEW_STOCK_COUNT price records, $NEW_COMPANY_COUNT company details"
 echo "✅ Data population completed successfully!"

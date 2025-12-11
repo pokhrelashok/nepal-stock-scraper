@@ -1,0 +1,15 @@
+meta {
+  name: Get Top Losers
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/market/losers?limit=20
+  body: none
+  auth: inherit
+}
+
+params:query {
+  limit: 20
+}

@@ -73,10 +73,10 @@ app.get('/', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     message: 'Welcome to NEPSE Portfolio API',
-    version: '2.1.0',
+    version: '2.2.0',
     endpoints: {
+      updates: '/api/updates',
       market: '/api/market/status',
-      stocks: '/api/prices',
       companies: '/api/companies',
       search: '/api/search?q=NABIL',
       health: '/health'
@@ -178,17 +178,48 @@ app.get('/api/scripts', async (req, res) => {
   }
 });
 
-app.post('/api/prices', async (req, res) => {
+app.post('/api/updates', async (req, res) => {
   try {
     const { symbols } = req.body;
     if (!symbols || !Array.isArray(symbols)) {
       return res.status(400).json(formatError("Invalid body. Expected { symbols: ['SYM', ...] }", 400));
     }
 
-    const data = await getLatestPrices(symbols);
-    res.json(formatResponse(data));
+    // Get stock prices
+    const stocks = await getLatestPrices(symbols);
+
+    // Get market status and index data
+    const marketStatus = await getCurrentMarketStatus();
+    const marketIndex = await getMarketIndexData();
+
+    const response = {
+      isOpen: marketStatus?.isOpen || false,
+      status: marketStatus?.isOpen ? 'OPEN' : 'CLOSED',
+      source: 'DATABASE_CACHE',
+      lastUpdated: marketStatus?.lastUpdated || new Date().toISOString(),
+      tradingDate: marketStatus?.tradingDate || null,
+      stocks: stocks
+    };
+
+    // Add market index data if available
+    if (marketIndex) {
+      response.marketIndex = {
+        nepseIndex: marketIndex.nepse_index,
+        change: marketIndex.index_change,
+        percentageChange: marketIndex.index_percentage_change,
+        totalTurnover: marketIndex.total_turnover,
+        totalTradedShares: marketIndex.total_traded_shares,
+        advanced: marketIndex.advanced,
+        declined: marketIndex.declined,
+        unchanged: marketIndex.unchanged,
+        statusDate: marketIndex.market_status_date,
+        statusTime: marketIndex.market_status_time
+      };
+    }
+
+    res.json(formatResponse(response));
   } catch (e) {
-    console.error('API Prices Error:', e);
+    console.error('API Updates Error:', e);
     res.status(500).json(formatError("Internal Server Error"));
   }
 });
@@ -410,7 +441,7 @@ app.get('/api', (req, res) => {
     { method: 'GET', path: '/api/search?q=QUERY', description: 'Search for stocks by symbol or name' },
     { method: 'GET', path: '/api/scripts', description: 'Get all scripts/companies with pagination' },
     { method: 'GET', path: '/api/scripts/SYMBOL', description: 'Get detailed information for a specific stock' },
-    { method: 'POST', path: '/api/prices', description: 'Get latest prices for multiple symbols', body: '{ "symbols": ["NABIL", "SHIVM"] }' },
+    { method: 'POST', path: '/api/updates', description: 'Get consolidated market updates with stock prices, market status, and index data', body: '{ "symbols": ["NABIL", "SHIVM"] }' },
     { method: 'GET', path: '/api/companies?limit=100&offset=0', description: 'Get paginated list of all companies' },
     { method: 'GET', path: '/api/companies/sector/SECTOR_NAME?limit=50', description: 'Get companies by sector' },
     { method: 'GET', path: '/api/companies/top/20', description: 'Get top companies by market capitalization' },
@@ -423,7 +454,7 @@ app.get('/api', (req, res) => {
 
   res.json(formatResponse({
     title: 'NEPSE Portfolio API',
-    version: '2.1.0',
+    version: '2.2.0',
     description: 'Enhanced API with comprehensive company data, real-time prices via API capture, market analytics, and financial metrics',
     endpoints
   }));

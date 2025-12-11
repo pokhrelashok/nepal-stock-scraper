@@ -1,202 +1,286 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const mysql = require('mysql2/promise');
 
-const dbPath = path.join(__dirname, '../../nepse.db');
+// Database configuration from environment variables
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '3306', 10),
+  user: process.env.DB_USER || 'nepse',
+  password: process.env.DB_PASSWORD || 'nepse_password',
+  database: process.env.DB_NAME || 'nepse_db',
+  waitForConnections: true,
+  connectionLimit: parseInt(process.env.DB_POOL_SIZE || '10', 10),
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
+  // Timezone for Nepal (UTC+5:45)
+  timezone: '+05:45'
+};
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to SQLite database.');
-    initSchema();
+// Create connection pool
+const pool = mysql.createPool(dbConfig);
+
+// Initialize database connection and schema
+let isInitialized = false;
+
+async function initializeDatabase() {
+  if (isInitialized) return;
+
+  try {
+    const connection = await pool.getConnection();
+    console.log('Connected to MySQL database.');
+    connection.release();
+    await initSchema();
+    isInitialized = true;
+  } catch (err) {
+    console.error('Error connecting to MySQL database:', err.message);
   }
-});
-
-function initSchema() {
-  const schema = `
-    CREATE TABLE IF NOT EXISTS stock_prices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        business_date TEXT NOT NULL,
-        security_id INTEGER NOT NULL,
-        symbol TEXT NOT NULL,
-        security_name TEXT,
-        open_price REAL,
-        high_price REAL,
-        low_price REAL,
-        close_price REAL,
-        total_traded_quantity INTEGER,
-        total_traded_value REAL,
-        previous_close REAL,
-        change REAL,
-        percentage_change REAL,
-        last_traded_price REAL,
-        fifty_two_week_high REAL,
-        fifty_two_week_low REAL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(symbol)
-    );
-    CREATE INDEX IF NOT EXISTS idx_stock_prices_symbol ON stock_prices(symbol);
-
-    CREATE TABLE IF NOT EXISTS company_details (
-        security_id INTEGER PRIMARY KEY, 
-        symbol TEXT NOT NULL,
-        company_name TEXT,
-        sector_name TEXT,
-        instrument_type TEXT,
-        issue_manager TEXT,
-        share_registrar TEXT,
-        listing_date TEXT,
-        total_listed_shares REAL,
-        paid_up_capital REAL,
-        total_paid_up_value REAL,
-        email TEXT,
-        website TEXT,
-        status TEXT,
-        permitted_to_trade TEXT,
-        promoter_shares REAL,
-        public_shares REAL,
-        market_capitalization REAL,
-        logo_url TEXT,
-        is_logo_placeholder BOOLEAN DEFAULT 1,
-        last_traded_price REAL,
-        open_price REAL,
-        close_price REAL,
-        high_price REAL,
-        low_price REAL,
-        previous_close REAL,
-        fifty_two_week_high REAL,
-        fifty_two_week_low REAL,
-        total_traded_quantity INTEGER,
-        total_trades INTEGER,
-        average_traded_price REAL,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_company_details_symbol ON company_details(symbol);
-
-    CREATE TABLE IF NOT EXISTS market_status (
-        id INTEGER PRIMARY KEY,
-        is_open BOOLEAN DEFAULT 0,
-        trading_date TEXT,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_market_status_date ON market_status(trading_date);
-
-    CREATE TABLE IF NOT EXISTS market_index (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        trading_date TEXT NOT NULL,
-        market_status_date TEXT,
-        market_status_time TEXT,
-        nepse_index REAL,
-        index_change REAL,
-        index_percentage_change REAL,
-        total_turnover REAL,
-        total_traded_shares INTEGER,
-        advanced INTEGER,
-        declined INTEGER,
-        unchanged INTEGER,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(trading_date)
-    );
-    CREATE INDEX IF NOT EXISTS idx_market_index_date ON market_index(trading_date);
-    `;
-
-  db.exec(schema, (err) => {
-    if (err) {
-      console.error('Failed to create schema:', err.message);
-    } else {
-      console.log('Schema initialized successfully.');
-    }
-  });
 }
 
-function savePrices(prices) {
+// Auto-initialize on module load
+initializeDatabase();
+
+async function initSchema() {
+  const connection = await pool.getConnection();
+  try {
+    // Create stock_prices table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS stock_prices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        business_date VARCHAR(20) NOT NULL,
+        security_id INT NOT NULL,
+        symbol VARCHAR(50) NOT NULL,
+        security_name VARCHAR(255),
+        open_price DECIMAL(15, 2),
+        high_price DECIMAL(15, 2),
+        low_price DECIMAL(15, 2),
+        close_price DECIMAL(15, 2),
+        total_traded_quantity BIGINT,
+        total_traded_value DECIMAL(20, 2),
+        previous_close DECIMAL(15, 2),
+        \`change\` DECIMAL(15, 2),
+        percentage_change DECIMAL(10, 4),
+        last_traded_price DECIMAL(15, 2),
+        fifty_two_week_high DECIMAL(15, 2),
+        fifty_two_week_low DECIMAL(15, 2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_symbol (symbol),
+        INDEX idx_stock_prices_symbol (symbol)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create company_details table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS company_details (
+        security_id INT PRIMARY KEY,
+        symbol VARCHAR(50) NOT NULL,
+        company_name VARCHAR(255),
+        sector_name VARCHAR(100),
+        instrument_type VARCHAR(50),
+        issue_manager VARCHAR(255),
+        share_registrar VARCHAR(255),
+        listing_date VARCHAR(20),
+        total_listed_shares DECIMAL(20, 2),
+        paid_up_capital DECIMAL(20, 2),
+        total_paid_up_value DECIMAL(20, 2),
+        email VARCHAR(255),
+        website VARCHAR(255),
+        status VARCHAR(50),
+        permitted_to_trade VARCHAR(50),
+        promoter_shares DECIMAL(20, 2),
+        public_shares DECIMAL(20, 2),
+        market_capitalization DECIMAL(25, 2),
+        logo_url VARCHAR(500),
+        is_logo_placeholder TINYINT(1) DEFAULT 1,
+        last_traded_price DECIMAL(15, 2),
+        open_price DECIMAL(15, 2),
+        close_price DECIMAL(15, 2),
+        high_price DECIMAL(15, 2),
+        low_price DECIMAL(15, 2),
+        previous_close DECIMAL(15, 2),
+        fifty_two_week_high DECIMAL(15, 2),
+        fifty_two_week_low DECIMAL(15, 2),
+        total_traded_quantity BIGINT,
+        total_trades INT,
+        average_traded_price DECIMAL(15, 2),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_company_details_symbol (symbol)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create market_status table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS market_status (
+        id INT PRIMARY KEY DEFAULT 1,
+        is_open TINYINT(1) DEFAULT 0,
+        trading_date VARCHAR(20),
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_market_status_date (trading_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create market_index table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS market_index (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        trading_date VARCHAR(20) NOT NULL,
+        market_status_date VARCHAR(50),
+        market_status_time VARCHAR(50),
+        nepse_index DECIMAL(15, 4),
+        index_change DECIMAL(15, 4),
+        index_percentage_change DECIMAL(10, 4),
+        total_turnover DECIMAL(25, 2),
+        total_traded_shares BIGINT,
+        advanced INT,
+        declined INT,
+        unchanged INT,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_trading_date (trading_date),
+        INDEX idx_market_index_date (trading_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    console.log('Schema initialized successfully.');
+  } catch (err) {
+    console.error('Failed to create schema:', err.message);
+  } finally {
+    connection.release();
+  }
+}
+
+async function savePrices(prices) {
   if (!prices || prices.length === 0) return Promise.resolve();
 
-  return new Promise((resolve, reject) => {
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO stock_prices (
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const sql = `
+      INSERT INTO stock_prices (
         business_date, security_id, symbol, security_name,
         open_price, high_price, low_price, close_price,
         total_traded_quantity, total_traded_value, previous_close,
-        change, percentage_change, last_traded_price,
+        \`change\`, percentage_change, last_traded_price,
         fifty_two_week_high, fifty_two_week_low, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        business_date = VALUES(business_date),
+        security_id = VALUES(security_id),
+        security_name = VALUES(security_name),
+        open_price = VALUES(open_price),
+        high_price = VALUES(high_price),
+        low_price = VALUES(low_price),
+        close_price = VALUES(close_price),
+        total_traded_quantity = VALUES(total_traded_quantity),
+        total_traded_value = VALUES(total_traded_value),
+        previous_close = VALUES(previous_close),
+        \`change\` = VALUES(\`change\`),
+        percentage_change = VALUES(percentage_change),
+        last_traded_price = VALUES(last_traded_price),
+        fifty_two_week_high = VALUES(fifty_two_week_high),
+        fifty_two_week_low = VALUES(fifty_two_week_low),
+        created_at = NOW()
+    `;
 
-    db.serialize(() => {
-      db.run("BEGIN TRANSACTION");
+    for (const p of prices) {
+      await connection.execute(sql, [
+        p.businessDate, p.securityId, p.symbol, p.securityName,
+        p.openPrice, p.highPrice, p.lowPrice, p.closePrice,
+        p.totalTradedQuantity, p.totalTradedValue, p.previousClose,
+        p.change, p.percentageChange, p.lastTradedPrice,
+        p.fiftyTwoWeekHigh, p.fiftyTwoWeekLow
+      ]);
+    }
 
-      prices.forEach(p => {
-        stmt.run(
-          p.businessDate, p.securityId, p.symbol, p.securityName,
-          p.openPrice, p.highPrice, p.lowPrice, p.closePrice,
-          p.totalTradedQuantity, p.totalTradedValue, p.previousClose,
-          p.change, p.percentageChange, p.lastTradedPrice,
-          p.fiftyTwoWeekHigh, p.fiftyTwoWeekLow
-        );
-      });
-
-      db.run("COMMIT", (err) => {
-        stmt.finalize();
-        if (err) reject(err);
-        else {
-          console.log(`Saved ${prices.length} price records.`);
-          resolve();
-        }
-      });
-    });
-  });
+    await connection.commit();
+    console.log(`Saved ${prices.length} price records.`);
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 }
 
-function saveCompanyDetails(detailsArray) {
+async function saveCompanyDetails(detailsArray) {
   if (!detailsArray || detailsArray.length === 0) return Promise.resolve();
 
-  return new Promise((resolve, reject) => {
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO company_details (
-        security_id, symbol, company_name, sector_name, 
-        instrument_type, issue_manager, share_registrar, 
-        listing_date, total_listed_shares, paid_up_capital, 
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const sql = `
+      INSERT INTO company_details (
+        security_id, symbol, company_name, sector_name,
+        instrument_type, issue_manager, share_registrar,
+        listing_date, total_listed_shares, paid_up_capital,
         total_paid_up_value, email, website, status, permitted_to_trade,
         promoter_shares, public_shares, market_capitalization,
         logo_url, is_logo_placeholder, last_traded_price,
         open_price, close_price, high_price, low_price, previous_close,
         fifty_two_week_high, fifty_two_week_low, total_traded_quantity,
         total_trades, average_traded_price, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        symbol = VALUES(symbol),
+        company_name = VALUES(company_name),
+        sector_name = VALUES(sector_name),
+        instrument_type = VALUES(instrument_type),
+        issue_manager = VALUES(issue_manager),
+        share_registrar = VALUES(share_registrar),
+        listing_date = VALUES(listing_date),
+        total_listed_shares = VALUES(total_listed_shares),
+        paid_up_capital = VALUES(paid_up_capital),
+        total_paid_up_value = VALUES(total_paid_up_value),
+        email = VALUES(email),
+        website = VALUES(website),
+        status = VALUES(status),
+        permitted_to_trade = VALUES(permitted_to_trade),
+        promoter_shares = VALUES(promoter_shares),
+        public_shares = VALUES(public_shares),
+        market_capitalization = VALUES(market_capitalization),
+        logo_url = VALUES(logo_url),
+        is_logo_placeholder = VALUES(is_logo_placeholder),
+        last_traded_price = VALUES(last_traded_price),
+        open_price = VALUES(open_price),
+        close_price = VALUES(close_price),
+        high_price = VALUES(high_price),
+        low_price = VALUES(low_price),
+        previous_close = VALUES(previous_close),
+        fifty_two_week_high = VALUES(fifty_two_week_high),
+        fifty_two_week_low = VALUES(fifty_two_week_low),
+        total_traded_quantity = VALUES(total_traded_quantity),
+        total_trades = VALUES(total_trades),
+        average_traded_price = VALUES(average_traded_price),
+        updated_at = NOW()
+    `;
 
-    db.serialize(() => {
-      db.run("BEGIN TRANSACTION");
+    for (const d of detailsArray) {
+      await connection.execute(sql, [
+        d.securityId, d.symbol, d.companyName, d.sectorName,
+        d.instrumentType, d.issueManager, d.shareRegistrar,
+        d.listingDate, d.totalListedShares, d.paidUpCapital,
+        d.totalPaidUpValue || null, d.email, d.website, d.status || null, d.permittedToTrade || null,
+        d.promoterShares || null, d.publicShares || null, d.marketCapitalization || null,
+        d.logoUrl || null, d.isLogoPlaceholder ? 1 : 0, d.lastTradedPrice || null,
+        d.openPrice || null, d.closePrice || null, d.highPrice || null, d.lowPrice || null, d.previousClose || null,
+        d.fiftyTwoWeekHigh || null, d.fiftyTwoWeekLow || null, d.totalTradedQuantity || null,
+        d.totalTrades || null, d.averageTradedPrice || null
+      ]);
+    }
 
-      detailsArray.forEach(d => {
-        stmt.run(
-          d.securityId, d.symbol, d.companyName, d.sectorName,
-          d.instrumentType, d.issueManager, d.shareRegistrar,
-          d.listingDate, d.totalListedShares, d.paidUpCapital,
-          d.totalPaidUpValue || null, d.email, d.website, d.status || null, d.permittedToTrade || null,
-          d.promoterShares || null, d.publicShares || null, d.marketCapitalization || null,
-          d.logoUrl || null, d.isLogoPlaceholder ? 1 : 0, d.lastTradedPrice || null,
-          d.openPrice || null, d.closePrice || null, d.highPrice || null, d.lowPrice || null, d.previousClose || null,
-          d.fiftyTwoWeekHigh || null, d.fiftyTwoWeekLow || null, d.totalTradedQuantity || null,
-          d.totalTrades || null, d.averageTradedPrice || null
-        );
-      });
-
-      db.run("COMMIT", (err) => {
-        stmt.finalize();
-        if (err) reject(err);
-        else {
-          console.log(`Saved/Updated ${detailsArray.length} company details.`);
-          resolve();
-        }
-      });
-    });
-  });
+    await connection.commit();
+    console.log(`Saved/Updated ${detailsArray.length} company details.`);
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 }
 
+// Export pool for queries
 module.exports = {
-  db,
+  pool,
   savePrices,
   saveCompanyDetails
 };

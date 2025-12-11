@@ -49,13 +49,16 @@ check_pm2_processes() {
 }
 
 check_database() {
-    local db_file="/var/www/nepse-api/nepse.db"
-    if [ -f "$db_file" ]; then
-        local size=$(ls -lh $db_file | awk '{print $5}')
-        local count=$(sqlite3 $db_file "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
-        echo "✅ Database: ${size}, ${count} price records"
+    # Load environment variables
+    if [ -f "/var/www/nepse-api/.env" ]; then
+        source /var/www/nepse-api/.env
+    fi
+    
+    local count=$(mysql -u ${DB_USER:-nepse} -p${DB_PASSWORD:-nepse_password} -h ${DB_HOST:-localhost} ${DB_NAME:-nepse_db} -N -e "SELECT COUNT(*) FROM stock_prices;" 2>/dev/null || echo "0")
+    if [ "$count" != "0" ]; then
+        echo "✅ Database: ${count} price records"
     else
-        echo "❌ Database: File not found"
+        echo "❌ Database: Unable to connect or no data"
     fi
 }
 

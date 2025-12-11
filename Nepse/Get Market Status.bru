@@ -1,0 +1,15 @@
+meta {
+  name: Get Market Status
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/market/status
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~refresh: true
+}

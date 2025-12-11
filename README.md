@@ -9,7 +9,7 @@ A comprehensive Node.js API for scraping and serving Nepal Stock Exchange (NEPSE
 - **Market Analytics**: Statistics, sector analysis, and top performers
 - **RESTful API**: Clean endpoints for accessing all data
 - **Automated Scheduling**: Cron-based scraping during market hours
-- **Database Storage**: SQLite database with 30+ fields per company
+- **Database Storage**: MySQL database with 30+ fields per company
 
 ## Architecture
 
@@ -58,7 +58,7 @@ npm test
 | **GET** | **`/api/market/status`** | **Get current market status (cached)** |
 | **GET** | **`/api/market/status?refresh=true`** | **Get live market status** |
 | GET | `/api/search?q=QUERY` | Search stocks by symbol or name |
-| POST | `/api/prices` | Get latest prices for multiple symbols |
+| **POST** | **`/api/updates`** | **Get consolidated market updates: stock prices, market status, and index data** |
 | **POST** | **`/api/scheduler/start`** | **Start the automated price scheduler** |
 | **POST** | **`/api/scheduler/stop`** | **Stop the automated price scheduler** |
 | **GET** | **`/api/scheduler/status`** | **Get scheduler status and active jobs** |
@@ -109,5 +109,18 @@ README.md
 ## Requirements
 
 - Node.js >= 16.0.0
-- SQLite3
+- MySQL 8.0+
 - Chrome/Chromium (for Puppeteer)
+
+## Environment Variables
+
+Configure your MySQL connection using these environment variables:
+
+```bash
+DB_HOST=localhost        # MySQL host
+DB_PORT=3306            # MySQL port
+DB_USER=nepse           # MySQL username
+DB_PASSWORD=your_pass   # MySQL password
+DB_NAME=nepse_db        # Database name
+DB_POOL_SIZE=10         # Connection pool size
+```
