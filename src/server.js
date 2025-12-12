@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const path = require('path');
 const Scheduler = require('./scheduler');
 const {
   searchStocks,
@@ -71,13 +70,6 @@ process.on('unhandledRejection', async (reason, promise) => {
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Home page route - serve HTML
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
 // API info route
 app.get('/api', (req, res) => {
   res.json({
@@ -88,14 +80,14 @@ app.get('/api', (req, res) => {
       market: '/api/market/status',
       companies: '/api/companies',
       search: '/api/search?q=NABIL',
-      health: '/health'
+      health: '/api/health'
     },
     documentation: 'https://github.com/pokhrelashok/nepal-stock-scraper'
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint (API-only)
+app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     uptime: process.uptime(),
