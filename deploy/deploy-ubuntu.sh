@@ -122,6 +122,16 @@ else
     echo "✅ User $APP_USER already exists"
 fi
 
+# Prepare SSH directory for the app user
+APP_HOME=$(eval echo "~$APP_USER")
+SSH_DIR="$APP_HOME/.ssh"
+echo "🔐 Ensuring SSH directory exists for $APP_USER..."
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+touch "$SSH_DIR/known_hosts"
+chmod 644 "$SSH_DIR/known_hosts"
+chown -R $APP_USER:$APP_USER "$SSH_DIR"
+
 echo "📁 Setting up application directory..."
 mkdir -p $APP_DIR
 chown $APP_USER:$APP_USER $APP_DIR
