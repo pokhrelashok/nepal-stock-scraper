@@ -386,6 +386,49 @@ body {
 }
 
 /* ============================================
+   Value Section
+   ============================================ */
+
+.value-section {
+  padding: 5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.value-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.75rem;
+  margin-top: 3rem;
+}
+
+.value-card {
+  background: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 15px;
+  padding: 1.75rem;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.value-icon {
+  font-size: 2rem;
+}
+
+.value-card h3 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.value-card p {
+  color: var(--text-light);
+  line-height: 1.7;
+}
+
+/* ============================================
    Market Widget Section
    ============================================ */
 
@@ -614,6 +657,85 @@ body {
 .feature-card p {
   color: var(--text-light);
   line-height: 1.8;
+}
+
+/* ============================================
+   Advantage Section
+   ============================================ */
+
+.advantage-section {
+  padding: 5rem 2rem;
+  background: linear-gradient(180deg, var(--light-bg) 0%, var(--white) 100%);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.advantage-table {
+  background: var(--white);
+  border-radius: 15px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.advantage-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.2fr;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.advantage-row:last-child {
+  border-bottom: none;
+}
+
+.advantage-head {
+  background: var(--light-bg);
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.advantage-badge {
+  padding: 0.55rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 700;
+  text-align: center;
+  display: inline-block;
+}
+
+.badge-primary {
+  background: rgba(82, 183, 136, 0.15);
+  color: var(--primary-color);
+}
+
+.badge-muted {
+  background: #eef2f7;
+  color: var(--text-light);
+}
+
+.advantage-feature {
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.advantage-status {
+  font-weight: 700;
+}
+
+.advantage-status.positive {
+  color: var(--success-color);
+}
+
+.advantage-status.negative {
+  color: var(--danger-color);
+}
+
+.privacy-note {
+  text-align: center;
+  color: var(--text-light);
+  margin-top: 1.5rem;
+  font-weight: 600;
 }
 
 /* ============================================
@@ -1064,6 +1186,58 @@ body {
 }
 
 /* ============================================
+   Roadmap Section
+   ============================================ */
+
+.roadmap-section {
+  padding: 5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 3rem;
+}
+
+.roadmap-card {
+  background: var(--white);
+  border-radius: 15px;
+  padding: 1.75rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.roadmap-tag {
+  display: inline-block;
+  align-self: flex-start;
+  background: rgba(82, 183, 136, 0.15);
+  color: var(--primary-color);
+  border-radius: 50px;
+  padding: 0.35rem 0.9rem;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.4px;
+}
+
+.roadmap-card h3 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.roadmap-card p {
+  color: var(--text-light);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ============================================
    CTA Section
    ============================================ */
 
@@ -1283,6 +1457,20 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
   }
+
+  .value-grid,
+  .roadmap-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advantage-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .advantage-row.advantage-head {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
 }
 
 @media (max-width: 480px) {
@@ -1403,5 +1591,9 @@ body {
   .footer-content {
     grid-template-columns: 1fr;
     gap: 2rem;
+  }
+
+  .advantage-table {
+    box-shadow: var(--shadow-md);
   }
 }
