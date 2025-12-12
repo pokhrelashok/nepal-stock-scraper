@@ -27,6 +27,14 @@ const PORT = process.env.PORT || 3000;
 const scheduler = new Scheduler();
 let isShuttingDown = false;
 
+// Helper to get Nepal date string (UTC+5:45) with optional day offset
+const getNepalDateString = (offsetDays = 0) => {
+  const now = new Date();
+  const nepaliDate = new Date(now.getTime() + (5.75 * 60 * 60 * 1000));
+  nepaliDate.setDate(nepaliDate.getDate() + offsetDays);
+  return nepaliDate.toISOString().split('T')[0];
+};
+
 // Graceful shutdown handling
 const cleanup = async (signal) => {
   if (isShuttingDown) {
@@ -191,7 +199,19 @@ app.post('/api/updates', async (req, res) => {
 
     // Get market status and index data
     const marketStatus = await getCurrentMarketStatus();
-    const marketIndex = await getMarketIndexData();
+    const primaryTradingDate = marketStatus?.tradingDate || getNepalDateString();
+
+    // Try to fetch today's market index; if missing, fall back to yesterday
+    let marketIndex = await getMarketIndexData(primaryTradingDate);
+    let marketIndexSource = 'DATABASE_CACHE';
+
+    if (!marketIndex) {
+      const previousTradingDate = getNepalDateString(-1);
+      marketIndex = await getMarketIndexData(previousTradingDate);
+      if (marketIndex) {
+        marketIndexSource = 'YESTERDAY_CACHE';
+      }
+    }
 
     const response = {
       isOpen: marketStatus?.isOpen || false,
@@ -214,7 +234,9 @@ app.post('/api/updates', async (req, res) => {
         declined: marketIndex.declined,
         unchanged: marketIndex.unchanged,
         statusDate: marketIndex.market_status_date,
-        statusTime: marketIndex.market_status_time
+        statusTime: marketIndex.market_status_time,
+        tradingDate: marketIndex.trading_date,
+        source: marketIndexSource
       };
     }
 
