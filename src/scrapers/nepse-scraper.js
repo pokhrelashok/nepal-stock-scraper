@@ -68,12 +68,6 @@ class NepseScraper {
         this.browser = await puppeteer.launch(launchOptions);
         console.log('✅ Browser launched successfully');
 
-        // Test basic browser functionality
-        const page = await this.browser.newPage();
-        console.log('📄 Test page created');
-        await page.close();
-        console.log('✅ Browser test passed');
-
       } catch (error) {
         console.error('❌ Browser launch failed:', error.message);
         console.error('🔍 Launch options:', JSON.stringify(launchOptions, null, 2));
@@ -482,12 +476,23 @@ class NepseScraper {
     console.log(`🏢 Starting company details scrape for ${securityIds.length} companies...`);
     await this.init();
     const details = [];
-    let currentBatch = [];
     let page = null;
 
     try {
       page = await this.browser.newPage();
       await page.setUserAgent(this.userAgent);
+
+      // Block heavy resources to speed up scraping
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const resourceType = req.resourceType();
+        // Block images, stylesheets, fonts, and media
+        if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+          req.abort();
+        } else {
+          req.continue();
+        }
+      });
 
       let count = 0;
       for (const sec of securityIds) {
@@ -496,20 +501,17 @@ class NepseScraper {
         const url = `https://www.nepalstock.com/company/detail/${security_id}`;
 
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
-          try {
-            await page.waitForSelector('.company__title--details', { timeout: 5000 });
-          } catch (e) { }
+          // Quick check for page load, don't wait long
+          await page.waitForSelector('.company__title--details', { timeout: 2000 }).catch(() => { });
 
-          try {
-            const profileTab = await page.$('#profileTab');
-            if (profileTab) {
-              await profileTab.click();
-              await page.waitForSelector('#profile_section', { timeout: 3000 }).catch(() => { });
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          } catch (e) { }
+          // Click profile tab if exists (no extra wait needed)
+          const profileTab = await page.$('#profileTab');
+          if (profileTab) {
+            await profileTab.click();
+            await page.waitForSelector('#profile_section', { timeout: 1500 }).catch(() => { });
+          }
 
           let data;
           try {
@@ -631,8 +633,15 @@ class NepseScraper {
             delete item.rawLogoData;
 
             details.push(item);
+
+            // Save immediately after scraping each company
             if (saveCallback) {
-              currentBatch.push(item);
+              try {
+                await saveCallback([item]);
+                console.log(`💾 Saved ${symbol} (${count}/${securityIds.length})`);
+              } catch (saveErr) {
+                console.error(`❌ Failed to save ${symbol}:`, saveErr.message);
+              }
             }
 
           } catch (evalError) {
@@ -646,20 +655,6 @@ class NepseScraper {
           }
         } catch (err) {
           console.error(`❌ Failed to scrape details for ${symbol}:`, err.message);
-        }
-
-        // Save batch of 10 or when reaching end
-        if (saveCallback && (currentBatch.length >= 10 || count === securityIds.length)) {
-          if (currentBatch.length > 0) {
-            try {
-              await saveCallback(currentBatch);
-              console.log(`💾 Saved batch of ${currentBatch.length} company details (${count}/${securityIds.length})`);
-              currentBatch = [];
-            } catch (saveErr) {
-              console.error(`❌ Failed to save batch:`, saveErr.message);
-              currentBatch = [];
-            }
-          }
         }
 
         if (count % 10 === 0) {
