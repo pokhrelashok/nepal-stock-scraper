@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
 const { insertTodayPrices, updateMarketStatus, saveMarketIndex, getSecurityIdsWithoutDetails, insertCompanyDetails } = require('./database/queries');
 const { formatPricesForDatabase } = require('./utils/formatter');
+const logger = require('./utils/logger');
 
 class Scheduler {
   constructor() {
@@ -30,11 +31,11 @@ class Scheduler {
 
   async startPriceUpdateSchedule() {
     if (this.isRunning) {
-      console.log('⚠️ Scheduler is already running');
+      logger.warn('Scheduler is already running');
       return;
     }
 
-    console.log('🚀 Starting price update scheduler...');
+    logger.info('Starting price update scheduler...');
 
     // Market index updates every 20 seconds during market hours (10 AM - 3 PM)
     const indexJob = cron.schedule('*/20 * * * * *', async () => {
@@ -79,7 +80,7 @@ class Scheduler {
     companyDetailsJob.start();
 
     this.isRunning = true;
-    console.log('📅 Scheduler started (index every 20s during hours, prices every 2 min, company details at 11:03)');
+    logger.info('Scheduler started (index every 20s during hours, prices every 2 min, company details at 11:03)');
   }
 
   async updateMarketIndex() {
@@ -125,7 +126,7 @@ class Scheduler {
         this.stats[jobKey].successCount++;
       }
     } catch (error) {
-      console.error('❌ Index update failed:', error.message);
+      logger.error('Index update failed:', error);
       this.stats[jobKey].failCount++;
     } finally {
       this.isJobRunning.set(jobKey, false);
@@ -137,14 +138,14 @@ class Scheduler {
 
     // Prevent overlapping runs
     if (this.isJobRunning.get(jobKey)) {
-      console.log(`⚠️ ${jobKey} is already running, skipping...`);
+      logger.warn(`${jobKey} is already running, skipping...`);
       return;
     }
 
     this.isJobRunning.set(jobKey, true);
     this.stats[jobKey].lastRun = new Date().toISOString();
 
-    console.log(`🕐 Scheduled ${phase === 'AFTER_CLOSE' ? 'close' : 'price'} update started...`);
+    logger.info(`Scheduled ${phase === 'AFTER_CLOSE' ? 'close' : 'price'} update started...`);
 
     try {
       const isOpen = await this.scraper.scrapeMarketStatus();
@@ -159,7 +160,7 @@ class Scheduler {
         await saveMarketIndex(indexData);
         console.log(`📈 Market index updated: ${indexData.nepseIndex} (${indexData.indexChange})`);
       } catch (indexError) {
-        console.warn('⚠️ Failed to update market index:', indexError.message);
+        logger.warn('Failed to update market index:', indexError);
       }
 
       if (phase === 'DURING_HOURS' && isOpen) {
@@ -181,7 +182,7 @@ class Scheduler {
       this.stats[jobKey].lastSuccess = new Date().toISOString();
       this.stats[jobKey].successCount++;
     } catch (error) {
-      console.error('❌ Scheduled update failed:', error.message);
+      logger.error('Scheduled update failed:', error);
       this.stats[jobKey].failCount++;
     } finally {
       this.isJobRunning.set(jobKey, false);
@@ -193,7 +194,7 @@ class Scheduler {
 
     // Prevent overlapping runs
     if (this.isJobRunning.get(jobKey)) {
-      console.log(`⚠️ ${jobKey} is already running, skipping...`);
+      logger.warn(`${jobKey} is already running, skipping...`);
       return;
     }
 
@@ -224,7 +225,7 @@ class Scheduler {
       this.stats[jobKey].lastSuccess = new Date().toISOString();
       this.stats[jobKey].successCount++;
     } catch (error) {
-      console.error('❌ Company details update failed:', error.message);
+      logger.error('Company details update failed:', error);
       this.stats[jobKey].failCount++;
     } finally {
       this.isJobRunning.set(jobKey, false);
@@ -241,7 +242,7 @@ class Scheduler {
   }
 
   async stopAllSchedules() {
-    console.log('🛑 Stopping all scheduled jobs...');
+    logger.info('Stopping all scheduled jobs...');
 
     for (const [name, job] of this.jobs) {
       job.stop();
@@ -251,7 +252,7 @@ class Scheduler {
 
     if (this.scraper) {
       await this.scraper.close();
-      console.log('🛑 Scraper resources cleaned up');
+      logger.info('Scraper resources cleaned up');
     }
 
     this.isRunning = false;

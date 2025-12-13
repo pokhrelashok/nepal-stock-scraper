@@ -1,5 +1,6 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
+const logger = require('../utils/logger');
 
 // Database configuration from environment variables
 const dbConfig = {
@@ -28,12 +29,12 @@ async function initializeDatabase() {
 
   try {
     const connection = await pool.getConnection();
-    console.log('Connected to MySQL database.');
+    logger.info('Connected to MySQL database.');
     connection.release();
     await initSchema();
     isInitialized = true;
   } catch (err) {
-    console.error('Error connecting to MySQL database:', err.message);
+    logger.error('Error connecting to MySQL database:', err);
   }
 }
 
@@ -140,9 +141,9 @@ async function initSchema() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    console.log('Schema initialized successfully.');
+    logger.info('Schema initialized successfully.');
   } catch (err) {
-    console.error('Failed to create schema:', err.message);
+    logger.error('Failed to create schema:', err);
   } finally {
     connection.release();
   }
@@ -193,7 +194,7 @@ async function savePrices(prices) {
     }
 
     await connection.commit();
-    console.log(`Saved ${prices.length} price records.`);
+    logger.info(`Saved ${prices.length} price records.`);
   } catch (err) {
     await connection.rollback();
     throw err;
@@ -270,7 +271,7 @@ async function saveCompanyDetails(detailsArray) {
     }
 
     await connection.commit();
-    console.log(`Saved/Updated ${detailsArray.length} company details.`);
+    logger.info(`Saved/Updated ${detailsArray.length} company details.`);
   } catch (err) {
     await connection.rollback();
     throw err;

@@ -1,4 +1,5 @@
 const { pool, savePrices, saveCompanyDetails } = require('./database');
+const logger = require('../utils/logger');
 
 // Wrapper functions for database operations
 function insertTodayPrices(prices) {
@@ -300,7 +301,7 @@ async function saveMarketIndex(indexData) {
     totalTurnover, totalTradedShares, advanced, declined, unchanged
   ]);
 
-  console.log('✅ Market index saved successfully');
+  logger.info('Market index saved successfully');
   return result.insertId;
 }
 

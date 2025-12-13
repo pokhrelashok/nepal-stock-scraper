@@ -18,6 +18,7 @@ const {
 } = require('./database/queries');
 const { NepseScraper } = require('./scrapers/nepse-scraper');
 const { formatResponse, formatError } = require('./utils/formatter');
+const logger = require('./utils/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -37,20 +38,20 @@ const getNepalDateString = (offsetDays = 0) => {
 // Graceful shutdown handling
 const cleanup = async (signal) => {
   if (isShuttingDown) {
-    console.log('⚠️ Shutdown already in progress...');
+    logger.warn('Shutdown already in progress...');
     return;
   }
   isShuttingDown = true;
 
-  console.log(`\n🧹 Received ${signal}, shutting down server...`);
+  logger.info(`Received ${signal}, shutting down server...`);
 
   try {
     if (scheduler) {
       await scheduler.stopAllSchedules();
     }
-    console.log('✅ Server shutdown completed');
+    logger.info('Server shutdown completed');
   } catch (error) {
-    console.error('❌ Error during shutdown:', error.message);
+    logger.error('Error during shutdown:', error);
   }
 
   process.exit(0);
@@ -59,11 +60,11 @@ const cleanup = async (signal) => {
 process.on('SIGINT', () => cleanup('SIGINT'));
 process.on('SIGTERM', () => cleanup('SIGTERM'));
 process.on('uncaughtException', async (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  logger.error('Uncaught Exception:', error);
   await cleanup('uncaughtException');
 });
 process.on('unhandledRejection', async (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', { promise, reason });
   await cleanup('unhandledRejection');
 });
 
@@ -137,7 +138,7 @@ app.get('/api/scheduler/status', (req, res) => {
     const health = scheduler.getHealth();
     res.json(formatResponse(health));
   } catch (error) {
-    console.error('Failed to get scheduler status:', error);
+    logger.error('Failed to get scheduler status:', error);
     res.status(500).json(formatError('Failed to get scheduler status'));
   }
 });
@@ -324,7 +325,7 @@ app.get('/api/market/stats', async (req, res) => {
       topVolume
     }));
   } catch (e) {
-    console.error('API Stats Error:', e);
+    logger.error('API Stats Error:', e);
     res.status(500).json(formatError("Internal Server Error"));
   }
 });
@@ -402,7 +403,7 @@ app.get('/api/market/status', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('API Market Status Error:', error);
+    logger.error('API Market Status Error:', error);
     res.status(500).json(formatError('Failed to get market status'));
   }
 });// New enhanced endpoints
@@ -515,14 +516,14 @@ app.get('/api', (req, res) => {
 });
 
 app.listen(PORT, async () => {
-  console.log(`API running at http://localhost:${PORT}`);
+  logger.info(`API running at http://localhost:${PORT}`);
 
   // Auto-start the scheduler
   try {
     await scheduler.startPriceUpdateSchedule();
-    console.log('✅ Scheduler auto-started on server boot');
+    logger.info('Scheduler auto-started on server boot');
   } catch (error) {
-    console.error('❌ Failed to auto-start scheduler:', error.message);
+    logger.error('Failed to auto-start scheduler:', error);
   }
 });
 
