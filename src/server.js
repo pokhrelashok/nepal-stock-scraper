@@ -173,14 +173,7 @@ app.get('/api/scripts/:symbol', async (req, res) => {
 
 app.get('/api/scripts', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 100;
-    const offset = parseInt(req.query.offset) || 0;
-
-    if (limit > 1000) {
-      return res.status(400).json(formatError("Limit cannot exceed 1000", 400));
-    }
-
-    const companies = await getAllCompanies(limit, offset);
+    const companies = await getAllCompanies();
     res.json(formatResponse(companies));
   } catch (e) {
     console.error('API Scripts Error:', e);

@@ -124,7 +124,7 @@ async function getLatestPrices(symbols, options = {}) {
   return rows;
 }
 
-async function getAllCompanies(limit = 100, offset = 0) {
+async function getAllCompanies() {
   const sql = `
     SELECT 
       cd.symbol,
@@ -134,11 +134,10 @@ async function getAllCompanies(limit = 100, offset = 0) {
       sp.\`change\` AS priceChange
     FROM company_details cd
     LEFT JOIN stock_prices sp ON cd.symbol = sp.symbol
-    ORDER BY cd.company_name 
-    LIMIT ? OFFSET ?
+    ORDER BY cd.company_name
   `;
 
-  const [rows] = await pool.execute(sql, [String(limit), String(offset)]);
+  const [rows] = await pool.execute(sql);
   return rows;
 }
 
